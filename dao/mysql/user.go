@@ -31,8 +31,17 @@ func SaveUser(user *models.User) (err error) {
 func CheckValidUser(user *models.User) (err error) {
 	oPassword := user.Password
 	// 先判断用户是否存在
-	sqlStatement := "select user_id,username,password from user where username = ?"
-	if err = db.Get(user, sqlStatement, user.Username); err != nil {
+	// 可以通过username或者wmail进行判断，如果本次使用username登录，则用username；否则用email
+	var sqlStatement string
+	if len(user.Username) > 0 {
+		sqlStatement = "select user_id,password from user where username = ?"
+		err = db.Get(user, sqlStatement, user.Username)
+	} else if len(user.Email) > 0 {
+		sqlStatement = "select user_id,username,password from user where email = ?"
+		err = db.Get(user, sqlStatement, user.Email)
+	}
+
+	if err != nil {
 		zap.L().Error("User not found...", zap.Error(err))
 		return ERROR_USER_NOT_EXISTED
 	}

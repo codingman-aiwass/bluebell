@@ -66,6 +66,7 @@ func SignIn(context *gin.Context) {
 	u := new(models.User)
 	u.Username = user.Username
 	u.Password = user.Password
+	u.Email = user.Email
 	if err := logic.SignIn(u); err != nil {
 		ResponseError(context, CODE_PASSWORD_ERROR)
 		zap.L().Error("user sign in parameter in controller.SignIn()...", zap.Error(err))

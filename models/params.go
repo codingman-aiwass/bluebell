@@ -8,7 +8,8 @@ type ParamUserSignUp struct {
 }
 
 type ParamUserSignIn struct {
-	Username string `json:"username" binding:"required"`
+	Username string `json:"username" validate:"omitempty,maxoneempty"`
+	Email    string `json:"email" validate:"omitempty,maxoneempty"`
 	Password string `json:"password" binding:"required"`
 }
 
