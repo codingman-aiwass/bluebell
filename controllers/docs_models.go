@@ -42,3 +42,12 @@ type _ResponseCommunities struct {
 	Msg  string              `json:"message"` // 提示信息
 	Data []*models.Community `json:"data"`    // community list
 }
+type _ResponseUserSendEmail struct {
+	Code ResponseCode `json:"code"`    // 业务状态响应码
+	Msg  string       `json:"message"` // 提示信息
+}
+
+type _ResponseUserVerifyEmail struct {
+	Code ResponseCode `json:"code"`    // 业务状态响应码
+	Msg  string       `json:"message"` // 提示信息
+}

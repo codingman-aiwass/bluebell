@@ -11,10 +11,12 @@ type AppSettings struct {
 	LogCfg   *LogConfig   `mapstructure:"log"`
 	MysqlCfg *MysqlConfig `mapstructure:"mysql"`
 	RedisCfg *RedisConfig `mapstructure:"redis"`
+	EmailCfg *EmailConfig `mapstructure:"email"`
 }
 type AppConfig struct {
 	Name      string `mapstructure:"name"`
 	Mode      string `mapstructure:"mode"`
+	Host      string `mapstructure:"host"`
 	Port      int    `mapstructure:"port"`
 	StartTime string `mapstructure:"start_time"`
 	MachineID int64  `mapstructure:"machine_id"`
@@ -41,6 +43,12 @@ type RedisConfig struct {
 	Password string `mapstructure:"password"`
 	Database int    `mapstructure:"database"`
 	PoolSize int    `mapstructure:"pool_size"`
+}
+type EmailConfig struct {
+	From     string `mapstructure:"email_from"`
+	AuthKey  string `mapstructure:"email_auth_key"`
+	SmtpHost string `mapstructure:"smtp_host"`
+	SmtpPort int    `mapstructure:"smtp_port"`
 }
 
 var GlobalSettings = new(AppSettings)

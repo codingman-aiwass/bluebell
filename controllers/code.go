@@ -20,6 +20,7 @@ const (
 	CODE_NOT_LOGIN
 	CODE_MORE_THAN_ONE_USER
 	CODE_NO_ROW_IN_DB
+	CODE_VERIFY_ERROR
 )
 
 var code_to_msg = map[ResponseCode]string{
@@ -33,6 +34,7 @@ var code_to_msg = map[ResponseCode]string{
 	CODE_NOT_LOGIN:          "not login",
 	CODE_MORE_THAN_ONE_USER: "more than one user",
 	CODE_NO_ROW_IN_DB:       "no data",
+	CODE_VERIFY_ERROR:       "verification error",
 }
 
 func getMsg(code ResponseCode) string {

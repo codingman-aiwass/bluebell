@@ -6,10 +6,24 @@ import (
 	"bluebell/models"
 	"bluebell/modules"
 	"bluebell/pkg/snowflake"
+	"context"
 	"errors"
 	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
 	"time"
+)
+
+var ctx = context.Background()
+var ERROR_EMAIL_VERIFIED_BEFORE = errors.New("email verified before")
+var ERROR_DUPLICATED_EMAIL = errors.New("this email has been occupied")
+
+const (
+	EMAIL_NOT_VERIFIED = iota
+	EMAIL_VERIFIED
+)
+const (
+	AccessTokenExpireDuration  = time.Hour * 2
+	RefreshTokenExpireDuration = time.Hour * 24 * 7
 )
 
 // 处理和用户相关的具体业务逻辑
@@ -49,9 +63,6 @@ type MyClaims struct {
 	Username string `json:"username"`
 	jwt.StandardClaims
 }
-
-const AccessTokenExpireDuration = time.Hour * 2
-const RefreshTokenExpireDuration = time.Hour * 24 * 7
 
 var MySecret = []byte("Hello Bluebell!")
 var INVALID_TOKEN = errors.New("invalid token")
@@ -153,6 +164,68 @@ func EditUserInfo(info *models.ParamUserEditInfo, userId int64) (err error) {
 		(info.Email == "" && info.Gender == 0) {
 		return nil
 	}
+	// 判断用户传来的值是否和数据库中已有的email重复
+	user, _ := mysql.GetUserByEmail(info.Email)
+	if user != nil {
+		return ERROR_DUPLICATED_EMAIL
+	}
 	return mysql.SaveUserEditableInfo(userId, info)
 
+}
+
+// 生成code，存入redis，发送验证邮件
+func SendEmailVerification(email string) error {
+	// 首先需要生成由email|code组成的经过base64编码过的字符串
+	info := modules.GenEmailVerificationInfo(email)
+	// 将信息设置一个有效期然后存入redis数据库
+	err := redis.SetEmailVerificationInfo(ctx, info, time.Minute*15)
+	if err != nil {
+		zap.L().Error("set email verification info in logic failed", zap.Error(err))
+		return err
+	}
+	// 生成email信息
+	emailData := GenEmailData(email, info)
+	// 准备发送邮件
+	err = SendEmail(email, emailData)
+	if err != nil {
+		zap.L().Error("send email failed", zap.Error(err))
+		return redis.ERROR_EMAIL_SEND_FAILED
+	}
+
+	return nil
+
+}
+
+func VerifyEmail(info string) error {
+	// 从redis中查看info是否存在以及是否过期
+	exists, err := redis.GetEmailVerificationCode(ctx, info)
+	// check if exists and expired
+	if err != nil || !exists {
+		zap.L().Warn("get email verification code from redis failed", zap.Error(err))
+		return redis.ERROR_EMAIL_INFO_NOT_EXISTS
+	}
+
+	// 确认存在以后，删掉这条记录
+	err = redis.DeleteEmailVerificationInfo(ctx, info)
+	if err != nil {
+		zap.L().Error("delete email verification info from redis failed", zap.Error(err))
+	}
+
+	// 提取出email信息，通过该信息找到用户，查看是否已经验证过，没有验证过就修改mysql状态
+	email, _, err := modules.ParseEmailVerificationInfo(info)
+	if err != nil {
+		zap.L().Error("parse email verification info from redis failed", zap.Error(err))
+		return err
+	}
+	user, err := mysql.GetUserByEmail(email)
+	if err != nil {
+		zap.L().Error("get user by email failed", zap.Error(err))
+		return err
+	}
+	if user.Verified == EMAIL_VERIFIED {
+		zap.L().Warn("email has been verified...", zap.String("email", email))
+		return ERROR_EMAIL_VERIFIED_BEFORE
+	}
+	err = mysql.UpdateUserFieldByEmail(email, "verified", EMAIL_VERIFIED)
+	return err
 }

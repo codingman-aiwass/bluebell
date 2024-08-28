@@ -36,3 +36,24 @@ func CheckUserId2AccessToken(userId int64, access_token string) (err error) {
 	}
 	return nil
 }
+
+// 将邮箱验证码存入redis
+func SetEmailVerificationInfo(ctx context.Context, info string, duration time.Duration) error {
+	err := rdb.Set(ctx, getKey(KeyMailVerification+":"+info), true, duration).Err()
+	if err != nil {
+		zap.L().Error("save email verification info to redis failed", zap.Error(err))
+		return err
+	}
+	return nil
+}
+
+// 查看验证码是否存在且未过期
+func GetEmailVerificationCode(ctx context.Context, info string) (bool, error) {
+	key := getKey(KeyMailVerification + ":" + info)
+	return rdb.Get(ctx, key).Bool()
+}
+
+// 删除验证码
+func DeleteEmailVerificationInfo(ctx context.Context, info string) error {
+	return rdb.Del(ctx, getKey(KeyMailVerification+":"+info)).Err()
+}

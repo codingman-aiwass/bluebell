@@ -81,6 +81,7 @@ func SignIn(context *gin.Context) {
 	if err != nil {
 		ResponseError(context, CODE_INTERNAL_ERROR)
 		zap.L().Error("user sign in jwt gen refresh token error in controller.SignIn()...", zap.Error(err))
+		return
 	}
 	// 4. 将access token存入redis数据库，实现每次只能有一个用户访问特定资源的目的
 	err = redis.SaveUserId2AccessToken(access_token, u.UserId)
@@ -112,11 +113,13 @@ func EditUserInfo(c *gin.Context) {
 	if err != nil {
 		zap.L().Error("bind user editable info error", zap.Error(err))
 		ResponseError(c, CODE_PARAM_ERROR)
+		return
 	}
 	// 调用逻辑层去修改数据库
 	if err = logic.EditUserInfo(info, c.GetInt64(ContextUserIdKey)); err != nil {
 		zap.L().Error("edit user info error", zap.Error(err))
 		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
 	}
 	ResponseSuccess(c, nil)
 }
@@ -145,6 +148,7 @@ func RefreshAccessToken(c *gin.Context) {
 	if len(tokens) != 2 {
 		zap.L().Error("invalid auth header")
 		ResponseError(c, CODE_INVALID_TOKEN)
+		return
 	}
 	accessToken, err := logic.RefreshToken(tokens[0], tokens[1])
 	if err != nil {
@@ -155,6 +159,67 @@ func RefreshAccessToken(c *gin.Context) {
 			zap.L().Error("refresh token error", zap.Error(err))
 			ResponseError(c, CODE_INTERNAL_ERROR)
 		}
+		return
 	}
 	ResponseSuccess(c, accessToken)
+}
+
+// SendEmail 实现获取邮箱验证码的接口
+// @Summary 发送验证邮件
+// @Description 产生验证链接，存入redis数据库，并发送给用户
+// @Tags 用户相关接口
+// @Accept application/json
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseUserSendEmail
+// @Router /api/v1/send-email [post]
+func SendEmail(c *gin.Context) {
+	// 需要获取当前用户的邮箱，然后生成一个验证链接，发送到用户邮箱
+	editableInfo, err := mysql.GetUserEditableInfoById(c.GetInt64(ContextUserIdKey))
+	if err != nil {
+		zap.L().Error("get user editable info error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	email := editableInfo.Email
+	// 接下来是logic层的范围了，给一个email,完成后续任务
+	err = logic.SendEmailVerification(email)
+	if err != nil {
+		zap.L().Error("send email verification error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(c, nil)
+}
+
+// VerifyEmail 实现验证用户邮箱功能
+// @Summary 验证用户邮箱
+// @Description 查看传入的info和redis数据库中存放的info，判断是否通过验证
+// @Tags 用户相关接口
+// @Produce application/json
+// @Param object query string true "info"
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseUserVerifyEmail
+// @Router /api/v1/verify-email [get]
+func VerifyEmail(c *gin.Context) {
+	// 传入参数是info
+	info := c.Query("info")
+	if len(info) == 0 {
+		zap.L().Warn("info is empty")
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	err := logic.VerifyEmail(info)
+	if err != nil {
+		if errors.Is(err, logic.ERROR_EMAIL_VERIFIED_BEFORE) {
+			ResponseSuccess(c, nil)
+			return
+		}
+		zap.L().Warn("verify email error", zap.Error(err))
+		ResponseError(c, CODE_VERIFY_ERROR)
+		return
+	}
+	ResponseSuccess(c, nil)
 }

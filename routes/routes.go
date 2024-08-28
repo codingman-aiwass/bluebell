@@ -25,6 +25,7 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.GET("/refresh-access-token", controllers.RefreshAccessToken)
 		v1.GET("/community", controllers.GetAllCommunities)
 		v1.GET("/community/:id", controllers.GetCommunityById)
+		v1.GET("/verify-email", controllers.VerifyEmail)
 	}
 	v1.Use(middleware.JWTAuthMiddleware())
 	{
@@ -34,6 +35,8 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.POST("/edit-info", controllers.EditUserInfo)
 		v1.POST("/post", controllers.CreatePost)
 		v1.POST("/vote-post", controllers.VoteForPost)
+		v1.POST("/send-email", controllers.SendEmail)
+
 		// 测试jwt-token，使得只有登录了的用户才能访问ping接口
 		r.GET("/ping", middleware.JWTAuthMiddleware(), func(c *gin.Context) {
 			c.JSON(200, gin.H{

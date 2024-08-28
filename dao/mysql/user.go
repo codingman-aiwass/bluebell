@@ -3,6 +3,7 @@ package mysql
 import (
 	"bluebell/models"
 	"bluebell/modules"
+	"fmt"
 	"go.uber.org/zap"
 )
 
@@ -74,4 +75,21 @@ func SaveUserEditableInfo(userId int64, editable_info *models.ParamUserEditInfo)
 		return ERROR_USER_NOT_EXISTED
 	}
 	return nil
+}
+
+func GetUserByEmail(email string) (user *models.User, err error) {
+	user = new(models.User)
+	sqlStatement := "select user_id,username,gender,verified from user where email = ?"
+	err = db.Get(user, sqlStatement, email)
+	if err != nil {
+		zap.L().Error("User not found...", zap.Error(err))
+		return nil, ERROR_USER_NOT_EXISTED
+	}
+	return user, nil
+}
+
+func UpdateUserFieldByEmail(email string, field string, value interface{}) (err error) {
+	sqlStatement := fmt.Sprintf("update user set %s = ? where email = ?", field)
+	_, err = db.Exec(sqlStatement, value, email)
+	return err
 }
