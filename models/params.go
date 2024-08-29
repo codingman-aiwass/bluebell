@@ -12,6 +12,10 @@ type ParamUserSignIn struct {
 	Email    string `json:"email" validate:"omitempty,maxoneempty"`
 	Password string `json:"password" binding:"required"`
 }
+type ParamUserSignInViaEmail struct {
+	Email            string `json:"email" bind:"required"`
+	VerificationCode string `json:"code" binding:"required"`
+}
 
 type ParamUserEditInfo struct {
 	Gender int8   `json:"gender"`

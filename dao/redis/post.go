@@ -14,7 +14,7 @@ func CheckPostExpired(postId string) (bool, error) {
 		zap.L().Error("redis get post time error", zap.Error(err))
 		return true, err
 	}
-	if float64(time.Now().Unix())-t > PostValidTime {
+	if float64(time.Now().Unix())-t > POST_VALID_TIME {
 		return true, nil
 	}
 	return false, nil

@@ -20,6 +20,7 @@ func GetAllCommunities(c *gin.Context) {
 	communities, err := logic.GetAllCommunities()
 	if err != nil {
 		ResponseError(c, CODE_NO_ROW_IN_DB)
+		return
 	}
 	ResponseSuccess(c, communities)
 
@@ -40,11 +41,13 @@ func GetCommunityById(c *gin.Context) {
 	if err != nil {
 		// 说明传进来的id有误，无法解析成int
 		ResponseError(c, CODE_PARAM_ERROR)
+		return
 	}
 	// 2. 调用逻辑层
 	community, err := logic.GetCommunityById(id)
 	if err != nil {
 		ResponseError(c, CODE_NO_ROW_IN_DB)
+		return
 	}
 	ResponseSuccess(c, community)
 

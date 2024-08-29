@@ -51,3 +51,9 @@ type _ResponseUserVerifyEmail struct {
 	Code ResponseCode `json:"code"`    // 业务状态响应码
 	Msg  string       `json:"message"` // 提示信息
 }
+
+type _ResponseEmailVerificationCode struct {
+	Code             ResponseCode `json:"code"`              // 业务状态响应码
+	Msg              string       `json:"message"`           // 提示信息
+	VerificationCode string       `json:"verification_code"` // 验证码
+}

@@ -22,10 +22,12 @@ func SetupRouter(mode string) *gin.Engine {
 	{
 		v1.POST("/signup", controllers.SignUp)
 		v1.POST("/login", controllers.SignIn)
+		v1.POST("/login-via-email", controllers.SignInViaEmail)
 		v1.GET("/refresh-access-token", controllers.RefreshAccessToken)
 		v1.GET("/community", controllers.GetAllCommunities)
 		v1.GET("/community/:id", controllers.GetCommunityById)
 		v1.GET("/verify-email", controllers.VerifyEmail)
+		v1.GET("/get-email-verification-code", controllers.GetVerificationCode)
 	}
 	v1.Use(middleware.JWTAuthMiddleware())
 	{

@@ -8,6 +8,7 @@ import (
 	"bluebell/pkg/snowflake"
 	"context"
 	"errors"
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
 	"time"
@@ -22,8 +23,10 @@ const (
 	EMAIL_VERIFIED
 )
 const (
-	AccessTokenExpireDuration  = time.Hour * 2
-	RefreshTokenExpireDuration = time.Hour * 24 * 7
+	AccessTokenExpireDuration   = time.Hour * 2
+	RefreshTokenExpireDuration  = time.Hour * 24 * 7
+	LoginTokenExpireDuration    = time.Hour * 24 * 30 * 12
+	EMAIL_VERIFICATION_CODE_LEN = 6
 )
 
 // 处理和用户相关的具体业务逻辑
@@ -50,10 +53,25 @@ func SignUp(user *models.ParamUserSignUp) (err error) {
 	return nil
 }
 
-func SignIn(user *models.User) (err error) {
+func SignInWithPassword(user *models.User) (err error) {
 	if err = mysql.CheckValidUser(user); err != nil {
 		zap.L().Error("check user failed", zap.Error(err))
 		return err
+	}
+	return nil
+}
+func SignInWithEmailVerificationCode(user *models.User) (err error) {
+	// 需要去redis中查询验证码是否存在
+	code, err := redis.CheckValidEmailVerificationCode(ctx, user)
+	// check if exists and expired
+	if err != nil || user.Password != code {
+		zap.L().Error("check email verification code failed", zap.Error(err))
+		return redis.ERROR_EMAIL_INVALID_VERIFICATION_CODE
+	}
+	// 将这个验证码删除
+	err = redis.DeleteEmailVerificationCode(ctx, user.Email)
+	if err != nil {
+		zap.L().Warn("delete email verification code failed", zap.Error(err))
 	}
 	return nil
 }
@@ -178,15 +196,15 @@ func SendEmailVerification(email string) error {
 	// 首先需要生成由email|code组成的经过base64编码过的字符串
 	info := modules.GenEmailVerificationInfo(email)
 	// 将信息设置一个有效期然后存入redis数据库
-	err := redis.SetEmailVerificationInfo(ctx, info, time.Minute*15)
+	err := redis.SetEmailVerificationInfo(ctx, info)
 	if err != nil {
 		zap.L().Error("set email verification info in logic failed", zap.Error(err))
 		return err
 	}
 	// 生成email信息
-	emailData := GenEmailData(email, info)
+	emailData := GenEmailVerificationData(email, info)
 	// 准备发送邮件
-	err = SendEmail(email, emailData)
+	err = SendVerificationInfoEmail(email, emailData)
 	if err != nil {
 		zap.L().Error("send email failed", zap.Error(err))
 		return redis.ERROR_EMAIL_SEND_FAILED
@@ -228,4 +246,74 @@ func VerifyEmail(info string) error {
 	}
 	err = mysql.UpdateUserFieldByEmail(email, "verified", EMAIL_VERIFIED)
 	return err
+}
+
+func VerifyLoginToken(userId int64, duration time.Duration) (err error) {
+	// 从redis中查看Login是否存在以及是否过期
+	exists, err := redis.GetUserLastLoginToken(ctx, userId)
+	// check if exists and expired
+	if err != nil || !exists {
+		zap.L().Warn("last login is too long ago", zap.Error(err))
+		return redis.ERROR_GAP_TOO_LONG
+	}
+
+	// 确认存在以后，更新记录的过期时间
+	err = redis.SetExpiredTime(ctx, userId, duration)
+	if err != nil {
+		zap.L().Error("reset Login Token in redis failed", zap.Error(err))
+	}
+	return err
+}
+
+func SignInPostProcess(u *models.User) (res gin.H, err error) {
+	if u.UserId == 0 {
+		user, err := mysql.GetUserByEmail(u.Email)
+		if err != nil {
+			zap.L().Error("get user by email failed", zap.Error(err))
+			return res, err
+		}
+		u.UserId = user.UserId
+	}
+
+	// 生成有效的token并返回给客户端
+	access_token, err := GenAccessToken(u)
+	if err != nil {
+		zap.L().Error("user sign in jwt gen access token error in controller.SignInWithPassword()...", zap.Error(err))
+	}
+	refresh_token, err := GenRefreshToken(u)
+	if err != nil {
+		zap.L().Error("user sign in jwt gen refresh token error in controller.SignInWithPassword()...", zap.Error(err))
+		return
+	}
+	// 将access token存入redis数据库，实现每次只能有一个用户访问特定资源的目的
+	err = redis.SaveUserId2AccessToken(access_token, u.UserId)
+	if err != nil {
+		zap.L().Error("user sign in jwt save access token to redis error in controller.SignInWithPassword()...", zap.Error(err))
+		return
+	}
+	res = gin.H{
+		"access_token":  access_token,
+		"refresh_token": refresh_token,
+	}
+	// 存入用户登录凭据，在一定时间内，下次就不用再用验证码登录
+
+	err = redis.SetUserLastLoginToken(ctx, u.UserId, LoginTokenExpireDuration)
+	if err != nil {
+		zap.L().Error("set user last login token in redis failed", zap.Error(err))
+		return nil, err
+	}
+
+	return res, nil
+}
+func GenerateCode(email string) (string, error) {
+	code := modules.GenCode(EMAIL_VERIFICATION_CODE_LEN)
+	// 将code存入redis
+	err := redis.SetEmailVerificationCode(ctx, email, code)
+	if err != nil {
+		return "", err
+	}
+	// 发送邮件
+
+	return code, nil
+
 }

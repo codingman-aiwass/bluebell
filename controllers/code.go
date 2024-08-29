@@ -21,20 +21,24 @@ const (
 	CODE_MORE_THAN_ONE_USER
 	CODE_NO_ROW_IN_DB
 	CODE_VERIFY_ERROR
+	CODE_TOO_LONG_NOT_LOGIN
+	CODE_VERFICATION_CODE_ERROR
 )
 
 var code_to_msg = map[ResponseCode]string{
-	CODE_SUCCESS:            "success",
-	CODE_USER_EXISTS:        "user has already existed",
-	CODE_USER_NOT_EXSITS:    "user does not exist",
-	CODE_PARAM_ERROR:        "parameter error",
-	CODE_PASSWORD_ERROR:     "username or password error",
-	CODE_INTERNAL_ERROR:     "internal server error",
-	CODE_INVALID_TOKEN:      "invalid token",
-	CODE_NOT_LOGIN:          "not login",
-	CODE_MORE_THAN_ONE_USER: "more than one user",
-	CODE_NO_ROW_IN_DB:       "no data",
-	CODE_VERIFY_ERROR:       "verification error",
+	CODE_SUCCESS:                "success",
+	CODE_USER_EXISTS:            "user has already existed",
+	CODE_USER_NOT_EXSITS:        "user does not exist",
+	CODE_PARAM_ERROR:            "parameter error",
+	CODE_PASSWORD_ERROR:         "username or password error",
+	CODE_INTERNAL_ERROR:         "internal server error",
+	CODE_INVALID_TOKEN:          "invalid token",
+	CODE_NOT_LOGIN:              "not login",
+	CODE_MORE_THAN_ONE_USER:     "more than one user",
+	CODE_NO_ROW_IN_DB:           "no data",
+	CODE_VERIFY_ERROR:           "verification error",
+	CODE_TOO_LONG_NOT_LOGIN:     "too long since last login",
+	CODE_VERFICATION_CODE_ERROR: "verification code error",
 }
 
 func getMsg(code ResponseCode) string {
@@ -47,7 +51,7 @@ func getMsg(code ResponseCode) string {
 
 type Response struct {
 	Code ResponseCode `json:"code"`
-	Msg  string       `json:"msg"`
+	Msg  string       `json:"message"`
 	Data interface{}  `json:"data,omitempty"`
 }
 

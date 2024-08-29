@@ -57,9 +57,9 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	diff := math.Abs(float64(post.Direction) - oValue)
 	// 修改评分
 	if post.Direction != 0 {
-		err = redis.SetPostScore(post.PostId, redis.PerVoteValue*diff*float64(post.Direction))
+		err = redis.SetPostScore(post.PostId, redis.PER_VOTE_VALUE*diff*float64(post.Direction))
 	} else {
-		err = redis.SetPostScore(post.PostId, -redis.PerVoteValue*diff*oValue)
+		err = redis.SetPostScore(post.PostId, -redis.PER_VOTE_VALUE*diff*oValue)
 	}
 	if err != nil {
 		zap.L().Error("set post score error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))

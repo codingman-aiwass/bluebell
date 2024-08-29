@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"bluebell/dao/mysql"
-	"bluebell/dao/redis"
 	"bluebell/logic"
 	"bluebell/models"
 	"errors"
@@ -67,34 +66,91 @@ func SignIn(context *gin.Context) {
 	u.Username = user.Username
 	u.Password = user.Password
 	u.Email = user.Email
-	if err := logic.SignIn(u); err != nil {
+	if err := logic.SignInWithPassword(u); err != nil {
 		ResponseError(context, CODE_PASSWORD_ERROR)
-		zap.L().Error("user sign in parameter in controller.SignIn()...", zap.Error(err))
+		zap.L().Error("user sign in parameter in controller.SignInWithPassword()...", zap.Error(err))
 		return
 	}
-	// 3. 生成有效的token并返回给客户端
-	access_token, err := logic.GenAccessToken(u)
-	if err != nil {
-		ResponseError(context, CODE_INTERNAL_ERROR)
-		zap.L().Error("user sign in jwt gen access token error in controller.SignIn()...", zap.Error(err))
-	}
-	refresh_token, err := logic.GenRefreshToken(u)
-	if err != nil {
-		ResponseError(context, CODE_INTERNAL_ERROR)
-		zap.L().Error("user sign in jwt gen refresh token error in controller.SignIn()...", zap.Error(err))
+	// 判断数据库中是否存在上次的登录凭据，如果不存在，需要邮箱验证码登录
+	if err := logic.VerifyLoginToken(u.UserId, logic.LoginTokenExpireDuration); err != nil {
+		ResponseError(context, CODE_TOO_LONG_NOT_LOGIN)
+		zap.L().Error("login token expired,need to login very email verification code...", zap.Error(err))
 		return
 	}
-	// 4. 将access token存入redis数据库，实现每次只能有一个用户访问特定资源的目的
-	err = redis.SaveUserId2AccessToken(access_token, u.UserId)
+	// 继续后续步骤
+	res, err := logic.SignInPostProcess(u)
 	if err != nil {
-		zap.L().Error("user sign in jwt save access token to redis error in controller.SignIn()...", zap.Error(err))
+		ResponseError(context, CODE_INTERNAL_ERROR)
+		zap.L().Error("user sign in postprocess error in controller.SignInWithPassword()...", zap.Error(err))
+		return
+	}
+	ResponseSuccess(context, res)
+}
+
+// SignInViaEmail 处理账户登录
+// @Summary 实现用户登录功能
+// @Description 接受用户输入的email，验证码，返回refresh-token 和 access-token
+// @Tags 用户相关接口
+// @Accept application/json
+// @Produce application/json
+// @Param object body models.ParamUserSignInViaEmail true "登录必备信息"
+// @Success 200 {object} _ResponseUserSignIn
+// @Router /api/v1/login-via-email [post]
+func SignInViaEmail(context *gin.Context) {
+	// 1. 参数校验
+	user := new(models.ParamUserSignInViaEmail)
+	if err := context.ShouldBindJSON(user); err != nil {
+		ResponseError(context, CODE_PARAM_ERROR)
+		zap.L().Error("user sign in parameter bind error...", zap.Error(err))
+		return
+	}
+	// 2.调用业务逻辑层
+	u := new(models.User)
+	u.Email = user.Email
+	u.Password = user.VerificationCode
+	if err := logic.SignInWithEmailVerificationCode(u); err != nil {
+		ResponseError(context, CODE_VERFICATION_CODE_ERROR)
+		zap.L().Error("user sign in verification code error in controller.SignInViaEmail()...", zap.Error(err))
+		return
+	}
+	// 3.继续后续步骤
+
+	res, err := logic.SignInPostProcess(u)
+	if err != nil {
+		ResponseError(context, CODE_INTERNAL_ERROR)
+		zap.L().Error("user sign in postprocess error in controller.SignInWithPassword()...", zap.Error(err))
+		return
+	}
+	ResponseSuccess(context, res)
+}
+
+// GetVerificationCode 获取登录的邮箱验证码
+// @Summary 获取登录的邮箱验证码
+// @Description 获取本次登录需要的验证码
+// @Tags 用户相关接口
+// @Produce application/json
+// @Param email query string true "email"
+// @Success 200 {object} _ResponseEmailVerificationCode
+// @Router /api/v1/get-email-verification-code [get]
+func GetVerificationCode(context *gin.Context) {
+	email := context.DefaultQuery("email", "")
+	if len(email) == 0 {
+		ResponseError(context, CODE_PARAM_ERROR)
+		return
+	}
+	// 在logic层产生验证码，存入Redis数据库
+	code, err := logic.GenerateCode(email)
+	if err != nil {
 		ResponseError(context, CODE_INTERNAL_ERROR)
 		return
 	}
-	ResponseSuccess(context, gin.H{
-		"access_token":  access_token,
-		"refresh_token": refresh_token,
-	})
+	// 发送邮件
+	err = logic.SendVerificationCodeEmail(email, code)
+	if err != nil {
+		ResponseError(context, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(context, nil)
 }
 
 // EditUserInfo 更新用户信息
@@ -199,9 +255,7 @@ func SendEmail(c *gin.Context) {
 // @Description 查看传入的info和redis数据库中存放的info，判断是否通过验证
 // @Tags 用户相关接口
 // @Produce application/json
-// @Param object query string true "info"
-// @Param Authorization header string false "Bearer 用户令牌"
-// @Security ApiKeyAuth
+// @Param info query string true "info"
 // @Success 200 {object} _ResponseUserVerifyEmail
 // @Router /api/v1/verify-email [get]
 func VerifyEmail(c *gin.Context) {
