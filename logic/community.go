@@ -1,6 +1,7 @@
 package logic
 
 import (
+	"bluebell/cache"
 	"bluebell/dao/mysql_repo"
 	"bluebell/models"
 	"bluebell/pkg/sqls"
@@ -20,7 +21,7 @@ func GetAllCommunities() (communities []models.Community, err error) {
 }
 
 func GetCommunityById(id int64) (community *models.Community, err error) {
-	community = mysql_repo.CommunityRepository.Get(sqls.DB(), id)
+	community = cache.CommunityCache.Get(id)
 	if community == nil {
 		err = ERROR_COMMUNITY_NOT_EXISTS
 	}
