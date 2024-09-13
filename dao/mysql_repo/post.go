@@ -1,4 +1,4 @@
-package mysql
+package mysql_repo
 
 import (
 	"bluebell/models"
@@ -9,9 +9,9 @@ import (
 
 func CreatePost(post *models.Post) (err error) {
 	sqlStatement := `insert into post (post_id,title,content,author_id,community_id) values(?,?,?,?,?)`
-	_, err = db.Exec(sqlStatement, post.ID, post.Title, post.Content, post.AuthorID, post.CommunityID)
+	_, err = db.Exec(sqlStatement, post.PostId, post.Title, post.Content, post.AuthorID, post.CommunityID)
 	if err != nil {
-		zap.L().Error("create post in mysql failed", zap.Error(err))
+		zap.L().Error("create post in mysql_repo failed", zap.Error(err))
 		return err
 	}
 	return nil
@@ -28,8 +28,8 @@ func GetPostById(postId int64) (post *models.Post, err error) {
 	return post, err
 }
 
-func GetPosts(pageNum, pageSize int64) (posts []*models.Post, err error) {
-	posts = make([]*models.Post, 0, pageSize)
+func GetPosts(pageNum, pageSize int64) (posts []models.Post, err error) {
+	posts = make([]models.Post, 0, pageSize)
 	sqlStatement := `select
 	post_id,title,content,author_id,community_id,create_time 
 	from post
@@ -38,9 +38,9 @@ func GetPosts(pageNum, pageSize int64) (posts []*models.Post, err error) {
 	return posts, err
 
 }
-func GetPostsByIds(postIds []string) (posts []*models.Post, err error) {
+func GetPostsByIds(postIds []string) (posts []models.Post, err error) {
 	// 通过id列表查询post表数据
-	posts = make([]*models.Post, 0, len(postIds))
+	posts = make([]models.Post, 0, len(postIds))
 	sqlStatement := `select post_id,title,content,author_id,community_id,create_time
 						from post
 						where post_id in (?)

@@ -1,17 +1,18 @@
-package redis
+package redis_repo
 
 import (
 	"bluebell/models"
 	"errors"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
+	"strconv"
 	"time"
 )
 
 func CheckPostExpired(postId string) (bool, error) {
 	t, err := rdb.ZScore(ctx, getKey(KeyPostTimeZset), postId).Result()
 	if err != nil {
-		zap.L().Error("redis get post time error", zap.Error(err))
+		zap.L().Error("redis_repo get post time error", zap.Error(err))
 		return true, err
 	}
 	if float64(time.Now().Unix())-t > POST_VALID_TIME {
@@ -46,11 +47,12 @@ func SetPostScore(postId string, score float64) (err error) {
 	return
 }
 
-func CreatePost(postId string) (err error) {
+func CreatePost(post *models.Post) (err error) {
 	pipe := rdb.TxPipeline()
 	// 创建帖子的time和score记录
-	pipe.ZAdd(ctx, getKey(KeyPostTimeZset), redis.Z{Score: float64(time.Now().Unix()), Member: postId})
-	pipe.ZAdd(ctx, getKey(KeyPostScoreZset), redis.Z{Score: 0, Member: postId})
+	pipe.ZAdd(ctx, getKey(KeyPostTimeZset), redis.Z{Score: float64(time.Now().Unix()), Member: post.PostId})
+	pipe.ZAdd(ctx, getKey(KeyPostScoreZset), redis.Z{Score: 0, Member: post.PostId})
+	pipe.SAdd(ctx, getKey(KeyCommunityPrefix+strconv.FormatInt(post.CommunityID, 10)), post.PostId)
 	_, err = pipe.Exec(ctx)
 	return
 }
@@ -87,10 +89,10 @@ func GetPostIds(param *models.ParamPostList) (postIds []string, err error) {
 	start := (param.Page - 1) * param.Size
 	end := start + param.Size
 	if flag {
-		postIds, err = rdb.ZRevRange(ctx, target_key, start, end).Result()
+		postIds, err = rdb.ZRevRange(ctx, target_key, int64(start), int64(end)).Result()
 
 	} else {
-		postIds, err = rdb.ZRevRange(ctx, key, start, end).Result()
+		postIds, err = rdb.ZRevRange(ctx, key, int64(start), int64(end)).Result()
 	}
 	return
 }
@@ -103,7 +105,7 @@ func GetPostVote(ids []string, vote string) (result []int64, err error) {
 	}
 	cmders, err := pipe.Exec(ctx)
 	if err != nil {
-		zap.L().Error("query post votes from redis error", zap.Error(err))
+		zap.L().Error("query post votes from redis_repo error", zap.Error(err))
 		return nil, err
 	}
 	result = make([]int64, 0, len(ids))

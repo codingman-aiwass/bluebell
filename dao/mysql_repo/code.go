@@ -1,4 +1,4 @@
-package mysql
+package mysql_repo
 
 import "errors"
 

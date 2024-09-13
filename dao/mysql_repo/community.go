@@ -1,11 +1,11 @@
-package mysql
+package mysql_repo
 
 import "bluebell/models"
 
-func GetAllCommunities() (communities *[]models.Community, err error) {
-	communities = new([]models.Community)
+func GetAllCommunities() (communities []models.Community, err error) {
+	communities = []models.Community{}
 	sqlStatement := "select community_id,community_name from community"
-	err = db.Select(communities, sqlStatement)
+	err = db.Select(&communities, sqlStatement)
 	if err != nil {
 		return nil, err
 	}

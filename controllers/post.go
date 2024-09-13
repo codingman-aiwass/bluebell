@@ -33,7 +33,7 @@ func CreatePost(c *gin.Context) {
 	author_id, _ := c.Get(ContextUserIdKey)
 	PostEntry.AuthorID, _ = author_id.(int64)
 	// 设置post id
-	PostEntry.ID = snowflake.GenID()
+	PostEntry.PostId = snowflake.GenID()
 
 	// 2.写入数据库
 	err = logic.CreatePost(PostEntry)
@@ -52,10 +52,10 @@ func CreatePost(c *gin.Context) {
 // @Tags 帖子相关接口
 // @Produce application/json
 // @Param Authorization header string false "Bearer 用户令牌"
-// @Param object query string true "post id"
+// @Param id path string true "post id"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponsePostDetail
-// @Router /api/v1/post/:id [get]
+// @Router /api/v1/post/{id} [get]
 func GetPostById(c *gin.Context) {
 	postDetail := new(models.PostDetail)
 	// 获取post id
@@ -154,7 +154,7 @@ func GetPostList(c *gin.Context) {
 		}
 		postDetail := models.PostDetail{
 			AuthorName: username,
-			Post:       post,
+			Post:       &post,
 			Community:  community,
 		}
 
@@ -223,7 +223,7 @@ func GetPostList2(c *gin.Context) {
 	// 从redis中获取id列表，再根据这个id列表去redis中获取点赞/反对的数量
 	ids, err := logic.GetPostsIds(param_list_query)
 	if err != nil {
-		zap.L().Error("get posts ids from redis failed", zap.Error(err))
+		zap.L().Error("get posts ids from redis_repo failed", zap.Error(err))
 		ResponseError(c, CODE_INTERNAL_ERROR)
 		return
 	}
@@ -241,7 +241,7 @@ func GetPostList2(c *gin.Context) {
 	// 获取post详细信息
 	posts, err := logic.GetPostsWithOrder(param_list_query)
 	if err != nil {
-		zap.L().Error("get posts failed from mysql error", zap.Error(err))
+		zap.L().Error("get posts failed from mysql_repo error", zap.Error(err))
 		ResponseError(c, CODE_INTERNAL_ERROR)
 		return
 	}
@@ -265,7 +265,7 @@ func GetPostList2(c *gin.Context) {
 			AuthorName: username,
 			YesVotes:   yes_vote[idx],
 			NoVotes:    no_vote[idx],
-			Post:       post,
+			Post:       &post,
 			Community:  community,
 		}
 

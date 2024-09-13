@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	"bluebell/dao/mysql"
+	"bluebell/dao/mysql_repo"
 	"bluebell/logic"
 	"bluebell/models"
 	"errors"
@@ -32,7 +32,7 @@ func SignUp(context *gin.Context) {
 	}
 	// 2.调用业务逻辑层
 	if err := logic.SignUp(user); err != nil {
-		if errors.Is(err, mysql.ERROR_USER_EXISTS) {
+		if errors.Is(err, mysql_repo.ERROR_USER_EXISTS) {
 			ResponseError(context, CODE_USER_EXISTS)
 		} else {
 			ResponseError(context, CODE_INTERNAL_ERROR)
@@ -233,13 +233,12 @@ func RefreshAccessToken(c *gin.Context) {
 // @Router /api/v1/send-email [post]
 func SendEmail(c *gin.Context) {
 	// 需要获取当前用户的邮箱，然后生成一个验证链接，发送到用户邮箱
-	editableInfo, err := mysql.GetUserEditableInfoById(c.GetInt64(ContextUserIdKey))
+	email, err := logic.GetEmailById(c.GetInt64(ContextUserIdKey))
 	if err != nil {
 		zap.L().Error("get user editable info error", zap.Error(err))
 		ResponseError(c, CODE_INTERNAL_ERROR)
 		return
 	}
-	email := editableInfo.Email
 	// 接下来是logic层的范围了，给一个email,完成后续任务
 	err = logic.SendEmailVerification(email)
 	if err != nil {

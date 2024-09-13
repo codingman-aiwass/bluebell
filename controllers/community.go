@@ -32,9 +32,9 @@ func GetAllCommunities(c *gin.Context) {
 // @Tags 社区相关接口
 // @Produce application/json
 // @Param Authorization header string false "Bearer 用户令牌"
-// @Param object query string true "community id"
+// @Param id path string true "community id"
 // @Success 200 {object} _ResponseCommunities
-// @Router /api/v1/community/:id [get]
+// @Router /api/v1/community/{id} [get]
 func GetCommunityById(c *gin.Context) {
 	// 1. 处理参数
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

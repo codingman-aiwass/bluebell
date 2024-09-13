@@ -7,7 +7,7 @@ package main
 
 // @contact.name John
 // @contact.url http://www.swagger.io/support
-// @contact.email support@swagger.io
+// @contact.emails support@swagger.io
 
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
@@ -15,8 +15,8 @@ package main
 // @Host localhost
 // @BasePath :8080/
 import (
-	"bluebell/dao/mysql"
-	"bluebell/dao/redis"
+	"bluebell/dao/mysql_repo"
+	"bluebell/dao/redis_repo"
 	"bluebell/logger"
 	"bluebell/pkg/snowflake"
 	"bluebell/routes"
@@ -46,22 +46,22 @@ func main() {
 	defer zap.L().Sync()
 	zap.L().Debug("logger init success...")
 	//3.初始化mysql
-	if err := mysql.Init(settings.GlobalSettings.MysqlCfg); err != nil {
+	if err := mysql_repo.InitDB(settings.GlobalSettings.MysqlCfg); err != nil {
 		fmt.Printf("init settings failed, err:%v\n", err)
 		return
 	}
-	defer mysql.CLose()
+	defer mysql_repo.Close()
 	// 初始化雪花算法
 	if err := snowflake.Init(settings.GlobalSettings.AppCfg.StartTime,
 		settings.GlobalSettings.AppCfg.MachineID); err != nil {
 		fmt.Printf("init snowflake failed, err:%v\n", err)
 	}
 	//4.初始化redis
-	if err := redis.Init(settings.GlobalSettings.RedisCfg); err != nil {
+	if err := redis_repo.Init(settings.GlobalSettings.RedisCfg); err != nil {
 		fmt.Printf("init settings failed, err:%v\n", err)
 		return
 	}
-	defer redis.CLose()
+	defer redis_repo.CLose()
 
 	//5.注册路由
 	r := routes.SetupRouter(settings.GlobalSettings.AppCfg.Mode)

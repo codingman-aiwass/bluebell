@@ -1,11 +1,15 @@
 package logic
 
 import (
-	"bluebell/dao/mysql"
-	"bluebell/dao/redis"
+	"bluebell/cache"
+	"bluebell/dao/mysql_repo"
+	"bluebell/dao/redis_repo"
 	"bluebell/models"
-	"bluebell/modules"
+	"bluebell/pkg/emails"
+	"bluebell/pkg/encrypt"
 	"bluebell/pkg/snowflake"
+	"bluebell/pkg/sqls"
+	"bluebell/pkg/validation"
 	"context"
 	"errors"
 	"github.com/gin-gonic/gin"
@@ -17,10 +21,13 @@ import (
 var ctx = context.Background()
 var ERROR_EMAIL_VERIFIED_BEFORE = errors.New("email verified before")
 var ERROR_DUPLICATED_EMAIL = errors.New("this email has been occupied")
+var ERROR_EMPTY_USERNAME = errors.New("username can not be empty")
+var ERROR_WRONG_PASSWORD = errors.New("username or password wrong")
+var ERROR_WRONG_USER = errors.New("no such user exists")
 
 const (
-	EMAIL_NOT_VERIFIED = iota
-	EMAIL_VERIFIED
+	EMAIL_NOT_VERIFIED = false
+	EMAIL_VERIFIED     = true
 )
 const (
 	AccessTokenExpireDuration   = time.Hour * 2
@@ -34,19 +41,36 @@ const (
 func SignUp(user *models.ParamUserSignUp) (err error) {
 	// 获取到用户传进来的结构体
 	// 首先需要判断该结构体中包含的用户名是否存在，如果存在则退出
-	if err = mysql.CheckUserExist(user.Username); err != nil {
+	if u := mysql_repo.UserRepository.GetByUsername(sqls.DB(), user.Username); u != nil {
 		zap.L().Error("user has already exists in db", zap.Error(err))
 		return
+	}
+	// 需要检查用户名/密码是否合法
+	if len(user.Username) == 0 {
+		zap.L().Error("username can not be empty", zap.Error(err))
+		return ERROR_EMPTY_USERNAME
+	}
+	if err = validation.IsValidPassword(user.Password, user.RePassword); err != nil {
+		zap.L().Error("password error", zap.Error(err))
+		return err
+	}
+
+	if len(user.Email) > 0 {
+		if err = validation.IsEmail(user.Email); err != nil {
+			zap.L().Error("invalid emails...", zap.Error(err))
+			return err
+		}
 	}
 
 	// 然后需要构建一个新的user结构体，存入数据库
 	u := &models.User{
 		UserId:   snowflake.GenID(),
 		Username: user.Username,
-		Password: modules.Encrypt(user.Password),
+		Password: encrypt.Encrypt(user.Password),
+		Email:    user.Email,
 	}
 	// 存入数据库
-	if err = mysql.SaveUser(u); err != nil {
+	if err = mysql_repo.UserRepository.Create(sqls.DB(), u); err != nil {
 		zap.L().Error("save user failed", zap.Error(err))
 		return
 	}
@@ -54,24 +78,36 @@ func SignUp(user *models.ParamUserSignUp) (err error) {
 }
 
 func SignInWithPassword(user *models.User) (err error) {
-	if err = mysql.CheckValidUser(user); err != nil {
-		zap.L().Error("check user failed", zap.Error(err))
-		return err
+	// 可能传进来的是email，或者是username
+	var u *models.User
+	if err = validation.IsUsername(user.Username); err == nil {
+		u = mysql_repo.UserRepository.GetByUsername(sqls.DB(), user.Username)
 	}
+	if err = validation.IsEmail(user.Email); err == nil {
+		u = mysql_repo.UserRepository.GetByEmail(sqls.DB(), user.Email)
+	}
+
+	if !validation.CheckPassword(user.Password, u.Password) {
+		zap.L().Error("check user failed", zap.Error(err))
+		return ERROR_WRONG_PASSWORD
+	}
+	user.UserId = u.UserId
+	user.Username = u.Username
+	user.Email = u.Email
 	return nil
 }
 func SignInWithEmailVerificationCode(user *models.User) (err error) {
 	// 需要去redis中查询验证码是否存在
-	code, err := redis.CheckValidEmailVerificationCode(ctx, user)
+	code, err := redis_repo.CheckValidEmailVerificationCode(ctx, user)
 	// check if exists and expired
 	if err != nil || user.Password != code {
-		zap.L().Error("check email verification code failed", zap.Error(err))
-		return redis.ERROR_EMAIL_INVALID_VERIFICATION_CODE
+		zap.L().Error("check emails verification code failed", zap.Error(err))
+		return redis_repo.ERROR_EMAIL_INVALID_VERIFICATION_CODE
 	}
 	// 将这个验证码删除
-	err = redis.DeleteEmailVerificationCode(ctx, user.Email)
+	err = redis_repo.DeleteEmailVerificationCode(ctx, user.Email)
 	if err != nil {
-		zap.L().Warn("delete email verification code failed", zap.Error(err))
+		zap.L().Warn("delete emails verification code failed", zap.Error(err))
 	}
 	return nil
 }
@@ -150,9 +186,9 @@ func RefreshToken(accessToken string, refreshToken string) (newAccessToken strin
 		}
 	}
 	// 将有效的access token记录到redis数据库中
-	err = redis.SaveUserId2AccessToken(newAccessToken, claim.UserId)
+	err = redis_repo.SaveUserId2AccessToken(newAccessToken, claim.UserId)
 	if err != nil {
-		zap.L().Error("save new access token to redis failed", zap.Error(err))
+		zap.L().Error("save new access token to redis_repo failed", zap.Error(err))
 		return newAccessToken, err
 	}
 
@@ -160,7 +196,7 @@ func RefreshToken(accessToken string, refreshToken string) (newAccessToken strin
 }
 
 func CheckMoreThanOneUser(userId int64, accessToken string) (bool, error) {
-	err := redis.CheckUserId2AccessToken(userId, accessToken)
+	err := redis_repo.CheckUserId2AccessToken(userId, accessToken)
 	if err != nil {
 		return true, err
 	}
@@ -168,14 +204,26 @@ func CheckMoreThanOneUser(userId int64, accessToken string) (bool, error) {
 }
 
 func GetUsernameById(userId int64) (username string, err error) {
-	return mysql.GetUsernameById(userId)
+	u := cache.UserCache.Get(userId)
+	if u == nil {
+		return "", ERROR_WRONG_USER
+	}
+	return u.Username, nil
+}
+
+func GetEmailById(userId int64) (email string, err error) {
+	u := cache.UserCache.Get(userId)
+	if u == nil {
+		return "", ERROR_WRONG_USER
+	}
+	return u.Email, nil
 }
 
 func EditUserInfo(info *models.ParamUserEditInfo, userId int64) (err error) {
 	// 先查看一下原本的值，如果用户传来的字段有的部分没有填,或者没有变动，就不做改动
-	oInfo, err := mysql.GetUserEditableInfoById(userId)
-	if err != nil {
-		zap.L().Error("get user editable info by id error", zap.Error(err))
+	oInfo := cache.UserCache.Get(userId)
+	if oInfo == nil {
+		zap.L().Error("get user editable info by id error", zap.Error(ERROR_WRONG_USER))
 	}
 	// 判断用户传来的值是否都为默认值或者原值
 	if (info.Email == oInfo.Email && info.Gender == oInfo.Gender) ||
@@ -183,31 +231,38 @@ func EditUserInfo(info *models.ParamUserEditInfo, userId int64) (err error) {
 		return nil
 	}
 	// 判断用户传来的值是否和数据库中已有的email重复
-	user, _ := mysql.GetUserByEmail(info.Email)
+	user := mysql_repo.UserRepository.GetByEmail(sqls.DB(), info.Email)
 	if user != nil {
 		return ERROR_DUPLICATED_EMAIL
 	}
-	return mysql.SaveUserEditableInfo(userId, info)
+	columns := map[string]interface{}{
+		"gender":   info.Gender,
+		"email":    info.Email,
+		"verified": 0,
+	}
 
+	err = mysql_repo.UserRepository.Updates(sqls.DB(), userId, columns)
+	cache.UserCache.Invalidate(userId)
+	return err
 }
 
 // 生成code，存入redis，发送验证邮件
-func SendEmailVerification(email string) error {
+func SendEmailVerification(email1 string) error {
 	// 首先需要生成由email|code组成的经过base64编码过的字符串
-	info := modules.GenEmailVerificationInfo(email)
+	info := emails.GenEmailVerificationInfo(email1)
 	// 将信息设置一个有效期然后存入redis数据库
-	err := redis.SetEmailVerificationInfo(ctx, info)
+	err := redis_repo.SetEmailVerificationInfo(ctx, info)
 	if err != nil {
-		zap.L().Error("set email verification info in logic failed", zap.Error(err))
+		zap.L().Error("set emails verification info in logic failed", zap.Error(err))
 		return err
 	}
 	// 生成email信息
-	emailData := GenEmailVerificationData(email, info)
+	emailData := GenEmailVerificationData(email1, info)
 	// 准备发送邮件
-	err = SendVerificationInfoEmail(email, emailData)
+	err = SendVerificationInfoEmail(email1, emailData)
 	if err != nil {
-		zap.L().Error("send email failed", zap.Error(err))
-		return redis.ERROR_EMAIL_SEND_FAILED
+		zap.L().Error("send emails failed", zap.Error(err))
+		return redis_repo.ERROR_EMAIL_SEND_FAILED
 	}
 
 	return nil
@@ -216,61 +271,61 @@ func SendEmailVerification(email string) error {
 
 func VerifyEmail(info string) error {
 	// 从redis中查看info是否存在以及是否过期
-	exists, err := redis.GetEmailVerificationCode(ctx, info)
+	exists, err := redis_repo.GetEmailVerificationCode(ctx, info)
 	// check if exists and expired
 	if err != nil || !exists {
-		zap.L().Warn("get email verification code from redis failed", zap.Error(err))
-		return redis.ERROR_EMAIL_INFO_NOT_EXISTS
+		zap.L().Warn("get emails verification code from redis_repo failed", zap.Error(err))
+		return redis_repo.ERROR_EMAIL_INFO_NOT_EXISTS
 	}
 
 	// 确认存在以后，删掉这条记录
-	err = redis.DeleteEmailVerificationInfo(ctx, info)
+	err = redis_repo.DeleteEmailVerificationInfo(ctx, info)
 	if err != nil {
-		zap.L().Error("delete email verification info from redis failed", zap.Error(err))
+		zap.L().Error("delete emails verification info from redis_repo failed", zap.Error(err))
 	}
 
 	// 提取出email信息，通过该信息找到用户，查看是否已经验证过，没有验证过就修改mysql状态
-	email, _, err := modules.ParseEmailVerificationInfo(info)
+	email, _, err := emails.ParseEmailVerificationInfo(info)
 	if err != nil {
-		zap.L().Error("parse email verification info from redis failed", zap.Error(err))
+		zap.L().Error("parse emails verification info from redis_repo failed", zap.Error(err))
 		return err
 	}
-	user, err := mysql.GetUserByEmail(email)
-	if err != nil {
-		zap.L().Error("get user by email failed", zap.Error(err))
-		return err
+	user := mysql_repo.UserRepository.GetByEmail(sqls.DB(), email)
+	if user == nil {
+		zap.L().Error("get user by emails failed", zap.Error(ERROR_WRONG_USER))
+		return ERROR_WRONG_USER
 	}
 	if user.Verified == EMAIL_VERIFIED {
-		zap.L().Warn("email has been verified...", zap.String("email", email))
+		zap.L().Warn("emails has been verified...", zap.String("emails", email))
 		return ERROR_EMAIL_VERIFIED_BEFORE
 	}
-	err = mysql.UpdateUserFieldByEmail(email, "verified", EMAIL_VERIFIED)
+	err = mysql_repo.UserRepository.UpdateColumn(sqls.DB(), user.UserId, "verified", EMAIL_VERIFIED)
 	return err
 }
 
 func VerifyLoginToken(userId int64, duration time.Duration) (err error) {
 	// 从redis中查看Login是否存在以及是否过期
-	exists, err := redis.GetUserLastLoginToken(ctx, userId)
+	exists, err := redis_repo.GetUserLastLoginToken(ctx, userId)
 	// check if exists and expired
 	if err != nil || !exists {
 		zap.L().Warn("last login is too long ago", zap.Error(err))
-		return redis.ERROR_GAP_TOO_LONG
+		return redis_repo.ERROR_GAP_TOO_LONG
 	}
 
 	// 确认存在以后，更新记录的过期时间
-	err = redis.SetExpiredTime(ctx, userId, duration)
+	err = redis_repo.SetExpiredTime(ctx, userId, duration)
 	if err != nil {
-		zap.L().Error("reset Login Token in redis failed", zap.Error(err))
+		zap.L().Error("reset Login Token in redis_repo failed", zap.Error(err))
 	}
 	return err
 }
 
 func SignInPostProcess(u *models.User) (res gin.H, err error) {
 	if u.UserId == 0 {
-		user, err := mysql.GetUserByEmail(u.Email)
-		if err != nil {
-			zap.L().Error("get user by email failed", zap.Error(err))
-			return res, err
+		user := mysql_repo.UserRepository.GetByEmail(sqls.DB(), u.Email)
+		if user == nil {
+			zap.L().Error("get user by emails failed", zap.Error(ERROR_WRONG_USER))
+			return res, ERROR_WRONG_USER
 		}
 		u.UserId = user.UserId
 	}
@@ -286,9 +341,9 @@ func SignInPostProcess(u *models.User) (res gin.H, err error) {
 		return
 	}
 	// 将access token存入redis数据库，实现每次只能有一个用户访问特定资源的目的
-	err = redis.SaveUserId2AccessToken(access_token, u.UserId)
+	err = redis_repo.SaveUserId2AccessToken(access_token, u.UserId)
 	if err != nil {
-		zap.L().Error("user sign in jwt save access token to redis error in controller.SignInWithPassword()...", zap.Error(err))
+		zap.L().Error("user sign in jwt save access token to redis_repo error in controller.SignInWithPassword()...", zap.Error(err))
 		return
 	}
 	res = gin.H{
@@ -297,18 +352,18 @@ func SignInPostProcess(u *models.User) (res gin.H, err error) {
 	}
 	// 存入用户登录凭据，在一定时间内，下次就不用再用验证码登录
 
-	err = redis.SetUserLastLoginToken(ctx, u.UserId, LoginTokenExpireDuration)
+	err = redis_repo.SetUserLastLoginToken(ctx, u.UserId, LoginTokenExpireDuration)
 	if err != nil {
-		zap.L().Error("set user last login token in redis failed", zap.Error(err))
+		zap.L().Error("set user last login token in redis_repo failed", zap.Error(err))
 		return nil, err
 	}
 
 	return res, nil
 }
-func GenerateCode(email string) (string, error) {
-	code := modules.GenCode(EMAIL_VERIFICATION_CODE_LEN)
+func GenerateCode(email1 string) (string, error) {
+	code := emails.GenCode(EMAIL_VERIFICATION_CODE_LEN)
 	// 将code存入redis
-	err := redis.SetEmailVerificationCode(ctx, email, code)
+	err := redis_repo.SetEmailVerificationCode(ctx, email1, code)
 	if err != nil {
 		return "", err
 	}

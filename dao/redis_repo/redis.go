@@ -1,4 +1,4 @@
-package redis
+package redis_repo
 
 import (
 	"bluebell/settings"

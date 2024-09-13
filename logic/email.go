@@ -115,7 +115,7 @@ func SendEmail(email, templateFileName string, alternative bool, data *EmailVeri
 	d.TLSConfig = &tls.Config{InsecureSkipVerify: true}
 
 	// 发送邮件
-	if err := d.DialAndSend(m); err != nil {
+	if err = d.DialAndSend(m); err != nil {
 		zap.L().Error("could not send email", zap.Error(err))
 		return err
 	}

@@ -1,4 +1,4 @@
-package modules
+package emails
 
 import (
 	"encoding/base64"

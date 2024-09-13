@@ -1,4 +1,4 @@
-package redis
+package redis_repo
 
 import (
 	"bluebell/models"
@@ -24,11 +24,11 @@ func CheckUserId2AccessToken(userId int64, access_token string) (err error) {
 	defer cancel()
 	accessToken, err := rdb.HGet(ctx, fmt.Sprintf("%s%s", KeyPrefix, KeyUserTokenHash), strconv.FormatInt(userId, 10)).Result()
 	if err != nil {
-		zap.L().Error("get access token from redis userid2access_token failed", zap.Error(err))
+		zap.L().Error("get access token from redis_repo userid2access_token failed", zap.Error(err))
 		return
 	}
 	if accessToken != access_token {
-		zap.L().Error("current access token is different from one in redis...", zap.Error(ERROR_MORE_THAN_ONE_USER))
+		zap.L().Error("current access token is different from one in redis_repo...", zap.Error(ERROR_MORE_THAN_ONE_USER))
 		return
 	}
 	return nil
@@ -58,19 +58,19 @@ func DeleteEmailVerificationCode(ctx context.Context, email string) error {
 
 // 查看用户上次登录凭据是否依然存在
 func GetUserLastLoginToken(ctx context.Context, userId int64) (bool, error) {
-	key := getKey(KeyPrefix + ":" + KeyUserLastLoginToken + ":" + strconv.FormatInt(userId, 10))
+	key := getKey(KeyUserLastLoginToken + ":" + strconv.FormatInt(userId, 10))
 	return rdb.Get(ctx, key).Bool()
 }
 
 // 存入用户登录凭据
 func SetUserLastLoginToken(ctx context.Context, userId int64, duration time.Duration) error {
-	err := rdb.Set(ctx, getKey(KeyMailVerification+":"+strconv.FormatInt(userId, 10)), true, duration).Err()
+	err := rdb.Set(ctx, getKey(KeyUserLastLoginToken+":"+strconv.FormatInt(userId, 10)), true, duration).Err()
 	return err
 }
 
 // 设置上次登录凭据的过期时间
 func SetExpiredTime(ctx context.Context, userId int64, duration time.Duration) error {
-	err := rdb.Expire(ctx, getKey(KeyPrefix+":"+KeyUserLastLoginToken+":"+strconv.FormatInt(userId, 10)), duration).Err()
+	err := rdb.Expire(ctx, getKey(KeyUserLastLoginToken+":"+strconv.FormatInt(userId, 10)), duration).Err()
 	return err
 }
 

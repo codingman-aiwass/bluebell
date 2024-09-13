@@ -34,8 +34,8 @@ type MysqlConfig struct {
 	User         string `mapstructure:"user"`
 	Password     string `mapstructure:"password"`
 	Database     string `mapstructure:"database"`
-	MaxOpenConns int    `mapstructure:"max_open_conns"`
-	MaxIdleConns int    `mapstructure:"max_idle_conns"`
+	MaxOpenConns int    `mapstructure:"max_open_connections"`
+	MaxIdleConns int    `mapstructure:"max_idle_connections"`
 }
 type RedisConfig struct {
 	Host     string `mapstructure:"host"`

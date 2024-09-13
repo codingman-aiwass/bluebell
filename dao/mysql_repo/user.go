@@ -1,8 +1,8 @@
-package mysql
+package mysql_repo
 
 import (
 	"bluebell/models"
-	"bluebell/modules"
+	"bluebell/pkg/encrypt"
 	"fmt"
 	"go.uber.org/zap"
 )
@@ -37,7 +37,7 @@ func CheckValidUser(user *models.User) (err error) {
 		sqlStatement = "select user_id,password from user where username = ?"
 		err = db.Get(user, sqlStatement, user.Username)
 	} else if len(user.Email) > 0 {
-		sqlStatement = "select user_id,username,password from user where email = ?"
+		sqlStatement = "select user_id,username,password from user where emails = ?"
 		err = db.Get(user, sqlStatement, user.Email)
 	}
 
@@ -46,7 +46,7 @@ func CheckValidUser(user *models.User) (err error) {
 		return ERROR_USER_NOT_EXISTED
 	}
 	// 计算密钥
-	password := modules.Encrypt(oPassword)
+	password := encrypt.Encrypt(oPassword)
 	if password != user.Password {
 		zap.L().Error("Invalid password...", zap.Error(err))
 		return ERROR_WRONG_PASSWORD
@@ -67,7 +67,7 @@ func GetUsernameById(userId int64) (username string, err error) {
 
 func GetUserEditableInfoById(userId int64) (editable_info *models.ParamUserEditInfo, err error) {
 	editable_info = &models.ParamUserEditInfo{}
-	sqlStatement := "select gender,email from user where user_id = ?"
+	sqlStatement := "select gender,emails from user where user_id = ?"
 	err = db.Get(editable_info, sqlStatement, userId)
 	if err != nil {
 		zap.L().Error("User not found...", zap.Error(err))
@@ -77,7 +77,7 @@ func GetUserEditableInfoById(userId int64) (editable_info *models.ParamUserEditI
 }
 
 func SaveUserEditableInfo(userId int64, editable_info *models.ParamUserEditInfo) (err error) {
-	sqlStatement := "update user set gender = ?, email = ? where user_id = ?"
+	sqlStatement := "update user set gender = ?, emails = ? where user_id = ?"
 	_, err = db.Exec(sqlStatement, editable_info.Gender, editable_info.Email, userId)
 	if err != nil {
 		zap.L().Error("User not found...", zap.Error(err))
@@ -88,7 +88,7 @@ func SaveUserEditableInfo(userId int64, editable_info *models.ParamUserEditInfo)
 
 func GetUserByEmail(email string) (user *models.User, err error) {
 	user = new(models.User)
-	sqlStatement := "select user_id,username,gender,verified from user where email = ?"
+	sqlStatement := "select user_id,username,gender,verified from user where emails = ?"
 	err = db.Get(user, sqlStatement, email)
 	if err != nil {
 		zap.L().Error("User not found...", zap.Error(err))
@@ -98,7 +98,7 @@ func GetUserByEmail(email string) (user *models.User, err error) {
 }
 
 func UpdateUserFieldByEmail(email string, field string, value interface{}) (err error) {
-	sqlStatement := fmt.Sprintf("update user set %s = ? where email = ?", field)
+	sqlStatement := fmt.Sprintf("update user set %s = ? where emails = ?", field)
 	_, err = db.Exec(sqlStatement, value, email)
 	return err
 }
