@@ -8,16 +8,19 @@ var Models = []interface{}{
 }
 
 type ParamUserSignUp struct {
-	Username   string `json:"username" binding:"required"`
-	Password   string `json:"password" binding:"required"`
-	RePassword string `json:"re_password" binding:"required,eqfield=Password"`
-	Email      string `json:"email"`
+	Username    string `json:"username" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	RePassword  string `json:"re_password" binding:"required,eqfield=Password"`
+	Email       string `json:"email"`
+	CaptchaId   string `json:"captcha-id" binding:"required"`
+	CaptchaCode string `json:"captcha-code" binding:"required"`
 }
 
 type ParamUserSignIn struct {
-	Username string `json:"username" validate:"omitempty,maxoneempty"`
-	Email    string `json:"email" validate:"omitempty,maxoneempty"`
-	Password string `json:"password" binding:"required"`
+	Username    string `json:"username" validate:"omitempty,maxoneempty"`
+	Password    string `json:"password" binding:"required"`
+	CaptchaId   string `json:"captcha-id" binding:"required"`
+	CaptchaCode string `json:"captcha-code" binding:"required"`
 }
 type ParamUserSignInViaEmail struct {
 	Email            string `json:"email" bind:"required"`
@@ -44,6 +47,10 @@ type ParamPostList struct {
 	Size        int    `form:"size"`
 	Order       string `form:"order"`
 	CommunityId string `form:"community_id"`
+}
+type ParamCaptchaInfo struct {
+	Id   string `form:"captcha-id"`
+	Code string `form:"captcha-code"`
 }
 
 type Model struct {

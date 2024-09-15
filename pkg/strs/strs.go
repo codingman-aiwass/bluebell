@@ -1,6 +1,10 @@
 package strs
 
-import "unicode"
+import (
+	uuid "github.com/iris-contrib/go.uuid"
+	"strings"
+	"unicode"
+)
 
 func IsBlank(str string) bool {
 	strLen := len(str)
@@ -19,4 +23,9 @@ func IsBlank(str string) bool {
 func RuneLen(s string) int {
 	bt := []rune(s)
 	return len(bt)
+}
+
+func UUID() string {
+	u, _ := uuid.NewV4()
+	return strings.ReplaceAll(u.String(), "-", "")
 }

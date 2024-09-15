@@ -57,3 +57,14 @@ type _ResponseEmailVerificationCode struct {
 	Msg              string       `json:"message" example:"ok"`               // 提示信息
 	VerificationCode string       `json:"verification_code" example:"AbedEf"` // 验证码
 }
+
+type _ResponseCaptchaVerification struct {
+	Code ResponseCode `json:"code" example:"200"`   // 业务状态响应码
+	Msg  string       `json:"message" example:"ok"` // 提示信息
+}
+
+type _ResponseCaptchaInfo struct {
+	Code ResponseCode `json:"code" example:"200"`   // 业务状态响应码
+	Msg  string       `json:"message" example:"ok"` // 提示信息
+	Data []string     `json:"data"`                 // catpcha id and url
+}

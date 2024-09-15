@@ -14,31 +14,6 @@ import (
 
 var db *sqlx.DB
 
-// Init and Close method for sqlx
-
-//func Init(cfg *settings.MysqlConfig) (err error) {
-//	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-//		cfg.User,
-//		cfg.Password,
-//		cfg.Host,
-//		cfg.Port,
-//		cfg.Database,
-//	)
-//	//dsn := "root:root@tcp(127.0.0.1:3306)/db1?charset=utf8mb4&parseTime=True"
-//	db, err = sqlx.Connect("mysql", dsn)
-//	if err != nil {
-//		zap.L().Error("mysql connect error", zap.Error(err))
-//		return
-//	}
-//	db.SetMaxOpenConns(cfg.MaxOpenConns)
-//	db.SetMaxIdleConns(cfg.MaxIdleConns)
-//	return
-//}
-//
-//func Close() {
-//	_ = db.Close()
-//}
-
 func InitDB(cfg *settings.MysqlConfig) (err error) {
 
 	gormConf := &gorm.Config{

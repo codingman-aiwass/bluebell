@@ -18,6 +18,7 @@ func SetupRouter(mode string) *gin.Engine {
 	r := gin.New()
 	r.Use(logger.GinLogger(), logger.GinRecovery(true))
 	v1 := r.Group("/api/v1")
+	captchas := v1.Group("/captcha")
 	// 注册业务路由
 	{
 		v1.POST("/signup", controllers.SignUp)
@@ -28,6 +29,9 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.GET("/community/:id", controllers.GetCommunityById)
 		v1.GET("/verify-email", controllers.VerifyEmail)
 		v1.GET("/get-email-verification-code", controllers.GetVerificationCode)
+		captchas.GET("/request", controllers.GetCaptchaInfo)
+		captchas.GET("/show", controllers.GetShow)
+		captchas.GET("/verify", controllers.GetVerify)
 	}
 	v1.Use(middleware.JWTAuthMiddleware())
 	{

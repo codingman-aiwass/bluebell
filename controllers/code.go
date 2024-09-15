@@ -1,7 +1,9 @@
 package controllers
 
 import (
+	"github.com/dchest/captcha"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 	"net/http"
 )
 
@@ -12,6 +14,7 @@ const ContextUserNameKey = "username"
 const (
 	CODE_SUCCESS = 100 * iota
 	CODE_USER_EXISTS
+	CODE_EMAIL_EXSITS
 	CODE_USER_NOT_EXSITS
 	CODE_PARAM_ERROR
 	CODE_PASSWORD_ERROR
@@ -28,6 +31,7 @@ const (
 var code_to_msg = map[ResponseCode]string{
 	CODE_SUCCESS:                "success",
 	CODE_USER_EXISTS:            "user has already existed",
+	CODE_EMAIL_EXSITS:           "email has already existed",
 	CODE_USER_NOT_EXSITS:        "user does not exist",
 	CODE_PARAM_ERROR:            "parameter error",
 	CODE_PASSWORD_ERROR:         "username or password error",
@@ -61,6 +65,19 @@ func ResponseSuccess(c *gin.Context, data interface{}) {
 		Msg:  getMsg(CODE_SUCCESS),
 		Data: data,
 	})
+}
+
+func ResponseCaptcha(c *gin.Context, captchaId string) {
+	c.Writer.Header().Set("Content-Type", "image/png")
+	err := captcha.WriteImage(c.Writer, captchaId, captcha.StdWidth, captcha.StdHeight)
+	if err != nil {
+		zap.L().Error("generate captcha picture error in captcha.WriteImage()...", zap.Error(err))
+		c.JSON(http.StatusOK, Response{
+			Code: CODE_INTERNAL_ERROR,
+			Msg:  getMsg(CODE_INTERNAL_ERROR),
+		})
+		return
+	}
 }
 
 func ResponseError(c *gin.Context, code ResponseCode) {

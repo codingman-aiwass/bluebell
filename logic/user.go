@@ -21,6 +21,7 @@ import (
 var ctx = context.Background()
 var ERROR_EMAIL_VERIFIED_BEFORE = errors.New("email verified before")
 var ERROR_DUPLICATED_EMAIL = errors.New("this email has been occupied")
+var ERROR_DUPLICATED_USERNAME = errors.New("this username has been occupied")
 var ERROR_EMPTY_USERNAME = errors.New("username can not be empty")
 var ERROR_WRONG_PASSWORD = errors.New("username or password wrong")
 var ERROR_WRONG_USER = errors.New("no such user exists")
@@ -30,9 +31,9 @@ const (
 	EMAIL_VERIFIED     = true
 )
 const (
-	AccessTokenExpireDuration   = time.Hour * 2
-	RefreshTokenExpireDuration  = time.Hour * 24 * 7
-	LoginTokenExpireDuration    = time.Hour * 24 * 30 * 12
+	AccessTokenExpireDuration  = time.Hour * 2
+	RefreshTokenExpireDuration = time.Hour * 24 * 7
+	//LoginTokenExpireDuration    = time.Hour * 24 * 30 * 12
 	EMAIL_VERIFICATION_CODE_LEN = 6
 )
 
@@ -42,15 +43,15 @@ func SignUp(user *models.ParamUserSignUp) (err error) {
 	// 获取到用户传进来的结构体
 	// 首先需要判断该结构体中包含的用户名是否存在，如果存在则退出
 	if u := mysql_repo.UserRepository.GetByUsername(sqls.DB(), user.Username); u != nil {
-		zap.L().Error("user has already exists in db", zap.Error(err))
-		return
+		zap.L().Error("user has already exists in db", zap.Error(ERROR_DUPLICATED_USERNAME))
+		return ERROR_DUPLICATED_USERNAME
 	}
 	// 需要检查用户名/密码是否合法
 	if len(user.Username) == 0 {
-		zap.L().Error("username can not be empty", zap.Error(err))
+		zap.L().Error("username can not be empty", zap.Error(ERROR_EMPTY_USERNAME))
 		return ERROR_EMPTY_USERNAME
 	}
-	if err = validation.IsValidPassword(user.Password, user.RePassword); err != nil {
+	if err = validation.IsPassword(user.Password); err != nil {
 		zap.L().Error("password error", zap.Error(err))
 		return err
 	}
@@ -59,6 +60,12 @@ func SignUp(user *models.ParamUserSignUp) (err error) {
 		if err = validation.IsEmail(user.Email); err != nil {
 			zap.L().Error("invalid emails...", zap.Error(err))
 			return err
+		}
+		// 判断数据库中是否已经有该email
+		u := mysql_repo.UserRepository.GetByEmail(sqls.DB(), user.Email)
+		if u != nil {
+			zap.L().Error("email has existed...", zap.Error(ERROR_DUPLICATED_EMAIL))
+			return ERROR_DUPLICATED_EMAIL
 		}
 	}
 
@@ -79,12 +86,16 @@ func SignUp(user *models.ParamUserSignUp) (err error) {
 
 func SignInWithPassword(user *models.User) (err error) {
 	// 可能传进来的是email，或者是username
-	var u *models.User
-	if err = validation.IsUsername(user.Username); err == nil {
-		u = mysql_repo.UserRepository.GetByUsername(sqls.DB(), user.Username)
+	var u *models.User = nil
+	// 先检查是否为email
+	if err = validation.IsEmail(user.Username); err == nil {
+		u = mysql_repo.UserRepository.GetByEmail(sqls.DB(), user.Username)
 	}
-	if err = validation.IsEmail(user.Email); err == nil {
-		u = mysql_repo.UserRepository.GetByEmail(sqls.DB(), user.Email)
+	// 按照email找不到的话再根据用户名
+	if u == nil {
+		if err = validation.IsUsername(user.Username); err == nil {
+			u = mysql_repo.UserRepository.GetByUsername(sqls.DB(), user.Username)
+		}
 	}
 
 	if !validation.CheckPassword(user.Password, u.Password) {
@@ -134,7 +145,7 @@ func GenAccessToken(user *models.User) (string, error) {
 	return token.SignedString(MySecret)
 }
 
-func GenRefreshToken(user *models.User) (string, error) {
+func GenRefreshToken() (string, error) {
 	c := jwt.StandardClaims{
 		ExpiresAt: time.Now().Add(RefreshTokenExpireDuration).Unix(),
 		Issuer:    "bluebell-project",
@@ -303,22 +314,22 @@ func VerifyEmail(info string) error {
 	return err
 }
 
-func VerifyLoginToken(userId int64, duration time.Duration) (err error) {
-	// 从redis中查看Login是否存在以及是否过期
-	exists, err := redis_repo.GetUserLastLoginToken(ctx, userId)
-	// check if exists and expired
-	if err != nil || !exists {
-		zap.L().Warn("last login is too long ago", zap.Error(err))
-		return redis_repo.ERROR_GAP_TOO_LONG
-	}
-
-	// 确认存在以后，更新记录的过期时间
-	err = redis_repo.SetExpiredTime(ctx, userId, duration)
-	if err != nil {
-		zap.L().Error("reset Login Token in redis_repo failed", zap.Error(err))
-	}
-	return err
-}
+//func VerifyLoginToken(userId int64, duration time.Duration) (err error) {
+//	// 从redis中查看Login是否存在以及是否过期
+//	exists, err := redis_repo.GetUserLastLoginToken(ctx, userId)
+//	// check if exists and expired
+//	if err != nil || !exists {
+//		zap.L().Warn("last login is too long ago", zap.Error(err))
+//		return redis_repo.ERROR_GAP_TOO_LONG
+//	}
+//
+//	// 确认存在以后，更新记录的过期时间
+//	err = redis_repo.SetExpiredTime(ctx, userId, duration)
+//	if err != nil {
+//		zap.L().Error("reset Login Token in redis_repo failed", zap.Error(err))
+//	}
+//	return err
+//}
 
 func SignInPostProcess(u *models.User) (res gin.H, err error) {
 	if u.UserId == 0 {
@@ -335,7 +346,7 @@ func SignInPostProcess(u *models.User) (res gin.H, err error) {
 	if err != nil {
 		zap.L().Error("user sign in jwt gen access token error in controller.SignInWithPassword()...", zap.Error(err))
 	}
-	refresh_token, err := GenRefreshToken(u)
+	refresh_token, err := GenRefreshToken()
 	if err != nil {
 		zap.L().Error("user sign in jwt gen refresh token error in controller.SignInWithPassword()...", zap.Error(err))
 		return
@@ -350,13 +361,13 @@ func SignInPostProcess(u *models.User) (res gin.H, err error) {
 		"access_token":  access_token,
 		"refresh_token": refresh_token,
 	}
-	// 存入用户登录凭据，在一定时间内，下次就不用再用验证码登录
 
-	err = redis_repo.SetUserLastLoginToken(ctx, u.UserId, LoginTokenExpireDuration)
-	if err != nil {
-		zap.L().Error("set user last login token in redis_repo failed", zap.Error(err))
-		return nil, err
-	}
+	// 存入用户登录凭据，在一定时间内，下次就不用再用验证码登录
+	//err = redis_repo.SetUserLastLoginToken(ctx, u.UserId, LoginTokenExpireDuration)
+	//if err != nil {
+	//	zap.L().Error("set user last login token in redis_repo failed", zap.Error(err))
+	//	return nil, err
+	//}
 
 	return res, nil
 }

@@ -1,10 +1,10 @@
 package controllers
 
 import (
-	"bluebell/dao/mysql_repo"
 	"bluebell/logic"
 	"bluebell/models"
 	"errors"
+	"github.com/dchest/captcha"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
@@ -30,10 +30,17 @@ func SignUp(context *gin.Context) {
 		zap.L().Error("user sign up parameter bind error...", zap.Error(err))
 		return
 	}
-	// 2.调用业务逻辑层
+	// 校验验证码
+	if !captcha.VerifyString(user.CaptchaId, user.CaptchaCode) {
+		ResponseError(context, CODE_VERFICATION_CODE_ERROR)
+		return
+	}
+	// 调用业务逻辑层
 	if err := logic.SignUp(user); err != nil {
-		if errors.Is(err, mysql_repo.ERROR_USER_EXISTS) {
+		if errors.Is(err, logic.ERROR_DUPLICATED_USERNAME) {
 			ResponseError(context, CODE_USER_EXISTS)
+		} else if errors.Is(err, logic.ERROR_DUPLICATED_EMAIL) {
+			ResponseError(context, CODE_EMAIL_EXSITS)
 		} else {
 			ResponseError(context, CODE_INTERNAL_ERROR)
 		}
@@ -61,22 +68,30 @@ func SignIn(context *gin.Context) {
 		zap.L().Error("user sign in parameter bind error...", zap.Error(err))
 		return
 	}
+
+	// 校验验证码
+	if !captcha.VerifyString(user.CaptchaId, user.CaptchaCode) {
+		ResponseError(context, CODE_VERFICATION_CODE_ERROR)
+		return
+	}
+
 	// 2.调用业务逻辑层
 	u := new(models.User)
 	u.Username = user.Username
 	u.Password = user.Password
-	u.Email = user.Email
 	if err := logic.SignInWithPassword(u); err != nil {
 		ResponseError(context, CODE_PASSWORD_ERROR)
 		zap.L().Error("user sign in parameter in controller.SignInWithPassword()...", zap.Error(err))
 		return
 	}
+
 	// 判断数据库中是否存在上次的登录凭据，如果不存在，需要邮箱验证码登录
-	if err := logic.VerifyLoginToken(u.UserId, logic.LoginTokenExpireDuration); err != nil {
-		ResponseError(context, CODE_TOO_LONG_NOT_LOGIN)
-		zap.L().Error("login token expired,need to login very email verification code...", zap.Error(err))
-		return
-	}
+	//if err := logic.VerifyLoginToken(u.UserId, logic.LoginTokenExpireDuration); err != nil {
+	//	ResponseError(context, CODE_TOO_LONG_NOT_LOGIN)
+	//	zap.L().Error("login token expired,need to login very email verification code...", zap.Error(err))
+	//	return
+	//}
+
 	// 继续后续步骤
 	res, err := logic.SignInPostProcess(u)
 	if err != nil {

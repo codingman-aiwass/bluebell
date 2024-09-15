@@ -6,11 +6,13 @@ toolchain go1.22.2
 
 require (
 	github.com/bwmarrin/snowflake v0.3.0
+	github.com/dchest/captcha v1.0.0
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-sql-driver/mysql v1.8.1
 	github.com/goburrow/cache v0.1.4
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/iris-contrib/go.uuid v2.0.0+incompatible
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/k3a/html2text v1.2.1
 	github.com/natefinch/lumberjack v2.0.0+incompatible
