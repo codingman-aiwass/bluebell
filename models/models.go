@@ -8,7 +8,7 @@ import (
 
 var Models = []interface{}{
 
-	&User{}, &Community{}, &Post{},
+	&User{}, &Community{}, &Post{}, &Comment{}, &Like{}, &Conversation{}, &Message{}, &Follow{},
 }
 
 type ParamUserSignUp struct {
@@ -65,7 +65,7 @@ type Model struct {
 
 type Post struct {
 	Model
-	PostId      int64  `gorm:"size:64;not null;uniqueKey:post_id;column:post_id" json:"id,string"`
+	PostId      int64  `gorm:"size:64;not null;uniqueIndex:idx_post_id;column:post_id" json:"id,string"`
 	AuthorID    int64  `gorm:"index:idx_author_id;size:64;not null;column:author_id" json:"author_id,string"`
 	CommunityID int64  `gorm:"index:idx_community_id;column:community_id;size:64;not null" json:"community_id,string" binding:"required"`
 	Status      int32  `gorm:"size:4;not null;column:status" json:"status"`
@@ -73,8 +73,6 @@ type Post struct {
 	Content     string `gorm:"size:8192;not null;column:content" json:"content" binding:"required"`
 
 	UpdateAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;;column:update_at" json:"update_at"`
-
-	Comments []Comment `gorm:"foreignKey:PostId"`
 }
 
 type PostDetail struct {
@@ -87,11 +85,11 @@ type PostDetail struct {
 
 type User struct {
 	Model
-	UserId   int64     `gorm:"size:64;not null;uniqueKey:idx_user_id;column:user_id" json:"user_id,string"`
-	Username string    `gorm:"size:64;not null;uniqueKey:idx_username;column:username" json:"username"`
+	UserId   int64     `gorm:"size:64;not null;uniqueIndex:idx_user_id;column:user_id" json:"user_id,string"`
+	Username string    `gorm:"size:64;not null;uniqueIndex:idx_username;column:username" json:"username"`
 	Password string    `gorm:"size:64;not null;column:password"`
 	Gender   int8      `gorm:"size:4;not null;default:0;column:gender" json:"gender"`
-	Email    string    `gorm:"size:64;column:emails" json:"email"`
+	Email    string    `gorm:"size:64;column:email" json:"email"`
 	Verified bool      `gorm:"default:false;column:verified"`
 	UpdateAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;column:update_at" json:"update_at"`
 }
@@ -114,10 +112,10 @@ type Comment struct {
 	UpdateAt        time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;column:update_at" json:"update_at"`
 
 	// Relationships
-	Post          Post      `gorm:"foreignKey:PostId;references:PostId"`
-	User          User      `gorm:"foreignKey:UserId;references:UserId"`
-	ParentComment *Comment  `gorm:"foreignKey:ParentCommentId;references:CommentId;constraint:OnDelete:CASCADE"`
-	Replies       []Comment `gorm:"foreignKey:ParentCommentId"`
+	//Post          Post      `gorm:"foreignKey:PostId;references:PostId"`
+	//User          User      `gorm:"foreignKey:UserId;references:UserId"`
+	//ParentComment *Comment  `gorm:"foreignKey:ParentCommentId;references:CommentId;constraint:OnDelete:CASCADE"`
+	//Replies       []Comment `gorm:"foreignKey:ParentCommentId;references:CommentId"`
 }
 
 type Like struct {
@@ -128,9 +126,9 @@ type Like struct {
 	CommentId *int64 `gorm:"size:64;null;index;column:comment_id" json:"comment_id,string"`
 
 	// Relationships
-	User    User     `gorm:"foreignKey:UserId;references:UserId"`
-	Post    *Post    `gorm:"foreignKey:PostId;references:PostId"`
-	Comment *Comment `gorm:"foreignKey:CommentId;references:CommentId"`
+	//User    User     `gorm:"foreignKey:UserId;references:UserId"`
+	//Post    *Post    `gorm:"foreignKey:PostId;references:PostId"`
+	//Comment *Comment `gorm:"foreignKey:CommentId;references:CommentId"`
 }
 
 // Custom validation logic to enforce CHECK constraint
@@ -148,8 +146,8 @@ type Conversation struct {
 	User2Id        int64 `gorm:"size:64;not null;index:idx_user_ids,unique;column:user_2_id" json:"user-2-id,string"`
 
 	// Relationships
-	User1 User `gorm:"foreignKey:User1Id;references:UserId"`
-	User2 User `gorm:"foreignKey:User2Id;references:UserId"`
+	//User1 User `gorm:"foreignKey:User1Id;references:UserId"`
+	//User2 User `gorm:"foreignKey:User2Id;references:UserId"`
 }
 
 type Message struct {
@@ -160,8 +158,8 @@ type Message struct {
 	Content        string `gorm:"size:8192;not null;column:content" json:"content"`
 
 	// Relationships
-	User         User         `gorm:"foreignKey:SenderId;references:UserId"`
-	Conversation Conversation `gorm:"foreignKey:ConversationId;references:ConversationId"`
+	//User         User         `gorm:"foreignKey:SenderId;references:UserId"`
+	//Conversation Conversation `gorm:"foreignKey:ConversationId;references:ConversationId"`
 }
 
 type Follow struct {
@@ -171,6 +169,6 @@ type Follow struct {
 	FollowingId int64 `gorm:"size:64;not null;index:idx_follow_ids,unique;column:following_id" json:"following_id,string"`
 
 	// Relationships
-	Follower  User `gorm:"foreignKey:FollowerId;references:UserId"`
-	Following User `gorm:"foreignKey:FollowingId;references:UserId"`
+	//Follower  User `gorm:"foreignKey:FollowerId;references:UserId"`
+	//Following User `gorm:"foreignKey:FollowingId;references:UserId"`
 }

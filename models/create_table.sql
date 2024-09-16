@@ -19,16 +19,16 @@ CREATE TABLE `t_user` (
 
 DROP TABLE IF EXISTS `t_community`;
 CREATE TABLE `t_community` (
-                             `id` bigint(64) NOT NULL AUTO_INCREMENT,
-                             `community_id` int(64) unsigned NOT NULL,
-                             `community_name` varchar(128) COLLATE utf8mb4_general_ci NOT NULL,
-                             `introduction` varchar(256) COLLATE utf8mb4_general_ci NOT NULL,
-                             `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                             `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                             `delete_at` TIMESTAMP,
-                             PRIMARY KEY (`id`),
-                             UNIQUE KEY `idx_community_id` (`community_id`),
-                             UNIQUE KEY `idx_community_name` (`community_name`)
+     `id` bigint(64) NOT NULL AUTO_INCREMENT,
+     `community_id` int(64) unsigned NOT NULL,
+     `community_name` varchar(128) COLLATE utf8mb4_general_ci NOT NULL,
+     `introduction` varchar(256) COLLATE utf8mb4_general_ci NOT NULL,
+     `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+     `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+     `delete_at` TIMESTAMP,
+     PRIMARY KEY (`id`),
+     UNIQUE KEY `idx_community_id` (`community_id`),
+     UNIQUE KEY `idx_community_name` (`community_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
@@ -39,20 +39,20 @@ CREATE TABLE `t_community` (
 
 DROP TABLE IF EXISTS `t_post`;
 CREATE TABLE `t_post` (
-                        `id` bigint(64) NOT NULL AUTO_INCREMENT,
-                        `post_id` bigint(64) NOT NULL COMMENT '帖子id',
-                        `title` varchar(128) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标题',
-                        `content` varchar(8192) COLLATE utf8mb4_general_ci NOT NULL COMMENT '内容',
-                        `author_id` bigint(64) NOT NULL COMMENT '作者的用户id',
-                        `community_id` bigint(64) NOT NULL COMMENT '所属社区',
-                        `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '帖子状态',
-                        `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-                        `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-                        `delete_at` TIMESTAMP,
-                        PRIMARY KEY (`id`),
-                        UNIQUE KEY `idx_post_id` (`post_id`),
-                        KEY `idx_author_id` (`author_id`),
-                        KEY `idx_community_id` (`community_id`)
+    `id` bigint(64) NOT NULL AUTO_INCREMENT,
+    `post_id` bigint(64) NOT NULL COMMENT '帖子id',
+    `title` varchar(128) COLLATE utf8mb4_general_ci NOT NULL COMMENT '标题',
+    `content` varchar(8192) COLLATE utf8mb4_general_ci NOT NULL COMMENT '内容',
+    `author_id` bigint(64) NOT NULL COMMENT '作者的用户id',
+    `community_id` bigint(64) NOT NULL COMMENT '所属社区',
+    `status` tinyint(4) NOT NULL DEFAULT '1' COMMENT '帖子状态',
+    `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `delete_at` TIMESTAMP,
+    UNIQUE KEY `idx_post_id` (`post_id`),
+    KEY `idx_author_id` (`author_id`),
+    KEY `idx_community_id` (`community_id`),
+    PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 # ALTER TABLE t_post
@@ -60,7 +60,8 @@ CREATE TABLE `t_post` (
 #
 # ALTER TABLE t_user
 #     ADD UNIQUE KEY `idx_user_id` (`user_id`);
-
+# ALTER TABLE t_user
+#     ADD UNIQUE KEY `idx_username` (`username`);
 DROP TABLE IF EXISTS `t_comment`;
 CREATE TABLE `t_comment`(
     `id` bigint(64) NOT NULL AUTO_INCREMENT,
@@ -73,9 +74,9 @@ CREATE TABLE `t_comment`(
     `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_comment_id`(`comment_id`),
-    FOREIGN KEY (post_id) REFERENCES t_post(post_id),
-    FOREIGN KEY (user_id) REFERENCES t_user(user_id),
-    FOREIGN KEY (parent_comment_id) REFERENCES t_comment(comment_id) ON DELETE CASCADE,
+#     FOREIGN KEY (post_id) REFERENCES t_post(post_id),
+#     FOREIGN KEY (user_id) REFERENCES t_user(user_id),
+#     FOREIGN KEY (parent_comment_id) REFERENCES t_comment(comment_id) ON DELETE CASCADE,
     PRIMARY KEY (`id`)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -89,9 +90,9 @@ CREATE TABLE t_like (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_like_id`(`like_id`),
-    FOREIGN KEY (user_id) REFERENCES t_user(user_id),
-    FOREIGN KEY (post_id) REFERENCES t_post(post_id),
-    FOREIGN KEY (comment_id) REFERENCES t_comment(comment_id),
+#     FOREIGN KEY (user_id) REFERENCES t_user(user_id),
+#     FOREIGN KEY (post_id) REFERENCES t_post(post_id),
+#     FOREIGN KEY (comment_id) REFERENCES t_comment(comment_id),
     CHECK (post_id IS NOT NULL OR comment_id IS NOT NULL), -- Ensure at least one is set
     PRIMARY KEY (`id`)
 );
@@ -105,14 +106,14 @@ CREATE TABLE t_conversation (
    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    `delete_at` TIMESTAMP,
    UNIQUE KEY `idx_conversation_id`(`conversation_id`),
-   FOREIGN KEY (user1_id) REFERENCES t_user(user_id),
-   FOREIGN KEY (user2_id) REFERENCES t_user(user_id),
+#    FOREIGN KEY (user1_id) REFERENCES t_user(user_id),
+#    FOREIGN KEY (user2_id) REFERENCES t_user(user_id),
    UNIQUE(user1_id, user2_id), -- Ensures one conversation between two users
    PRIMARY KEY (`id`)
 );
 
 DROP TABLE IF EXISTS `t_message`;
-CREATE TABLE messages (
+CREATE TABLE t_message (
     `id` bigint(64) NOT NULL AUTO_INCREMENT,
     `message_id` bigint(64) NOT NULL,
     `conversation_id` bigint(64) NOT NULL, -- The conversation the message belongs to
@@ -121,13 +122,13 @@ CREATE TABLE messages (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_message_id`(`message_id`),
-    FOREIGN KEY (conversation_id) REFERENCES t_conversation(conversation_id),
-    FOREIGN KEY (sender_id) REFERENCES t_user(user_id),
+#     FOREIGN KEY (conversation_id) REFERENCES t_conversation(conversation_id),
+#     FOREIGN KEY (sender_id) REFERENCES t_user(user_id),
     PRIMARY KEY (`id`)
 );
 
 DROP TABLE IF EXISTS `t_follow`;
-CREATE TABLE follows (
+CREATE TABLE t_follow (
     `id` bigint(64) NOT NULL AUTO_INCREMENT,
     `follow_id` bigint(64) NOT NULL,
     `follower_id` bigint(64) NOT NULL, -- The user who is following
@@ -135,8 +136,8 @@ CREATE TABLE follows (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_follow_id`(`follow_id`),
-    FOREIGN KEY (follower_id) REFERENCES t_user(id),
-    FOREIGN KEY (following_id) REFERENCES t_user(id),
+#     FOREIGN KEY (follower_id) REFERENCES t_user(id),
+#     FOREIGN KEY (following_id) REFERENCES t_user(id),
     UNIQUE(follower_id, following_id), -- Prevent duplicate follows
     PRIMARY KEY (`id`)
 );

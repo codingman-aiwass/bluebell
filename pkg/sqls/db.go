@@ -51,7 +51,7 @@ func Open(dbConfig *settings.MysqlConfig, config *gorm.Config, models ...interfa
 	}
 
 	if err = db.AutoMigrate(models...); nil != err {
-		zap.L().Error("auto migrate tables failed: %s", zap.Error(err))
+		zap.L().Error("auto migrate tables failed", zap.Error(err))
 	}
 	return
 }
