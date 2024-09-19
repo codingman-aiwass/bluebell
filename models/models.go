@@ -40,6 +40,11 @@ type ParamVotePost struct {
 	PostId    string `json:"post_id" binding:"required"`
 	Direction int8   `json:"direction" binding:"required,oneof=0 1 -1"`
 }
+type ParamPostCreate struct {
+	Title       string `json:"title" binding:"required"`
+	Content     string `json:"content" binding:"required"`
+	CommunityId int64  `json:"community_id,string" binding:"required"`
+}
 
 const (
 	OrderByTime  = "time"
@@ -60,7 +65,7 @@ type ParamCaptchaInfo struct {
 type Model struct {
 	Id       int64          `gorm:"size:64;primaryKey;autoIncrement;column:id" json:"id"`
 	CreateAt time.Time      `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP;column:create_at" json:"create_at"`
-	DeleteAt gorm.DeletedAt `gorm:"index;column:delete_at"`
+	DeleteAt gorm.DeletedAt `gorm:"index;column:delete_at" json:"deleted_at,omitempty"`
 }
 
 type Post struct {
@@ -89,6 +94,7 @@ type User struct {
 	Username string    `gorm:"size:64;not null;uniqueIndex:idx_username;column:username" json:"username"`
 	Password string    `gorm:"size:64;not null;column:password"`
 	Gender   int8      `gorm:"size:4;not null;default:0;column:gender" json:"gender"`
+	Status   int8      `gorm:"size:4;not null;default:0;column:status" json:"status"`
 	Email    string    `gorm:"size:64;column:email" json:"email"`
 	Verified bool      `gorm:"default:false;column:verified"`
 	UpdateAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;column:update_at" json:"update_at"`
@@ -120,10 +126,10 @@ type Comment struct {
 
 type Like struct {
 	Model
-	LikeId    int64  `gorm:"size:64;not null;uniqueIndex:idx_like_id;column:like_id" json:"id,string"`
-	UserId    int64  `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
-	PostId    *int64 `gorm:"size:64;null;index;column:post_id" json:"post_id,string"`
-	CommentId *int64 `gorm:"size:64;null;index;column:comment_id" json:"comment_id,string"`
+	LikeId    int64 `gorm:"size:64;not null;uniqueIndex:idx_like_id;column:like_id" json:"id,string"`
+	UserId    int64 `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
+	PostId    int64 `gorm:"size:64;null;index;column:post_id" json:"post_id,string"`
+	CommentId int64 `gorm:"size:64;null;index;column:comment_id" json:"comment_id,string"`
 
 	// Relationships
 	//User    User     `gorm:"foreignKey:UserId;references:UserId"`
@@ -133,7 +139,7 @@ type Like struct {
 
 // Custom validation logic to enforce CHECK constraint
 func (like *Like) BeforeSave(tx *gorm.DB) (err error) {
-	if like.PostId == nil && like.CommentId == nil {
+	if like.PostId == 0 && like.CommentId == 0 {
 		return errors.New("either PostID or CommentID must be set")
 	}
 	return nil

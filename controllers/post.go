@@ -1,9 +1,12 @@
 package controllers
 
 import (
+	"bluebell/dao/mysql_repo"
 	"bluebell/logic"
 	"bluebell/models"
 	"bluebell/pkg/snowflake"
+	"bluebell/pkg/sqls"
+	"bluebell/pkg/validation"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"strconv"
@@ -16,24 +19,40 @@ import (
 // @Accept application/json
 // @Produce application/json
 // @Param Authorization header string false "Bearer 用户令牌"
-// @Param object body models.Post true "需要创建帖子的详细信息"
+// @Param object body models.ParamPostCreate true "需要创建帖子的详细信息"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponsePostCreate
 // @Router /api/v1/post [post]
 func CreatePost(c *gin.Context) {
 	// 1. 获取绑定的参数
 	PostEntry := new(models.Post)
-	err := c.ShouldBindJSON(PostEntry)
+	PostParam := new(models.ParamPostCreate)
+	err := c.ShouldBindJSON(PostParam)
 	if err != nil {
 		zap.L().Error("bind post failed", zap.Error(err))
 		ResponseError(c, CODE_PARAM_ERROR)
 		return
 	}
+	PostEntry.Title = PostParam.Title
+	PostEntry.Content = PostParam.Content
+	PostEntry.CommunityID = PostParam.CommunityId
 	// 获取author_id
-	author_id, _ := c.Get(ContextUserIdKey)
-	PostEntry.AuthorID, _ = author_id.(int64)
+	author_id := c.GetInt64(ContextUserIdKey)
+	PostEntry.AuthorID = author_id
 	// 设置post id
 	PostEntry.PostId = snowflake.GenID()
+	// 判断用户此时是否处于已经验证通过且未被禁言状态.也需要检查用户是否超过了一定时间内的发帖上限
+	u := mysql_repo.UserRepository.Get(sqls.DB(), author_id)
+	if !(u.Status == NORMAL_STATUS || u.Verified == EMAIL_VERFIED) {
+		zap.L().Warn("This user is not allowed publishing post due to its status or verified")
+		ResponseError(c, CODE_NOT_ALLOW_PUBLISH_POST)
+		return
+	}
+	if err = validation.CheckPost(u, nil); err != nil {
+		zap.L().Error("This user hit some strategy, fail to publish post", zap.Error(err))
+		ResponseError(c, CODE_NOT_ALLOW_PUBLISH_POST)
+		return
+	}
 
 	// 2.写入数据库
 	err = logic.CreatePost(PostEntry)
@@ -107,62 +126,62 @@ func GetPostById(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponsePostDetail
 // @Router /api/v1/posts [get]
-func GetPostList(c *gin.Context) {
-	// 1.处理参数
-	p := &models.ParamPostList{
-		Page: 1,
-		Size: 10,
-	}
-	if err := c.ShouldBindQuery(p); err != nil {
-		zap.L().Error("get post list failed with invalid params", zap.Error(err))
-		ResponseError(c, CODE_PARAM_ERROR)
-	}
-	//pageStr := c.DefaultQuery("page", "1")
-	//pageSizeStr := c.DefaultQuery("size", "10")
-	//page, err := strconv.ParseInt(pageStr, 10, 64)
-	//if err != nil {
-	//	zap.L().Error("parse page failed", zap.Error(err))
-	//	ResponseError(c, CODE_PARAM_ERROR)
-	//}
-	//pageSize, err := strconv.ParseInt(pageSizeStr, 10, 64)
-	//if err != nil {
-	//	zap.L().Error("parse page size failed", zap.Error(err))
-	//	ResponseError(c, CODE_PARAM_ERROR)
-	//}
-
-	// 2.业务逻辑处理
-	// 获取post详细信息
-	posts, err := logic.GetPosts(p.Page-1, p.Size)
-	if err != nil {
-		return
-	}
-	postDetailList := make([]models.PostDetail, 0, len(posts))
-	for _, post := range posts {
-		// 获取username
-		username, err := logic.GetUsernameById(post.AuthorID)
-		if err != nil {
-			zap.L().Error("get username by id failed", zap.Error(err))
-			ResponseError(c, CODE_INTERNAL_ERROR)
-			return
-		}
-		// 获取社区详细信息
-		community, err := logic.GetCommunityById(post.CommunityID)
-		if err != nil {
-			zap.L().Error("get community by id failed", zap.Error(err))
-			ResponseError(c, CODE_INTERNAL_ERROR)
-			return
-		}
-		postDetail := models.PostDetail{
-			AuthorName: username,
-			Post:       &post,
-			Community:  community,
-		}
-
-		postDetailList = append(postDetailList, postDetail)
-	}
-	ResponseSuccess(c, &postDetailList)
-
-}
+//func GetPostList(c *gin.Context) {
+//	// 1.处理参数
+//	p := &models.ParamPostList{
+//		Page: 1,
+//		Size: 10,
+//	}
+//	if err := c.ShouldBindQuery(p); err != nil {
+//		zap.L().Error("get post list failed with invalid params", zap.Error(err))
+//		ResponseError(c, CODE_PARAM_ERROR)
+//	}
+//	//pageStr := c.DefaultQuery("page", "1")
+//	//pageSizeStr := c.DefaultQuery("size", "10")
+//	//page, err := strconv.ParseInt(pageStr, 10, 64)
+//	//if err != nil {
+//	//	zap.L().Error("parse page failed", zap.Error(err))
+//	//	ResponseError(c, CODE_PARAM_ERROR)
+//	//}
+//	//pageSize, err := strconv.ParseInt(pageSizeStr, 10, 64)
+//	//if err != nil {
+//	//	zap.L().Error("parse page size failed", zap.Error(err))
+//	//	ResponseError(c, CODE_PARAM_ERROR)
+//	//}
+//
+//	// 2.业务逻辑处理
+//	// 获取post详细信息
+//	posts, err := logic.GetPosts(p.Page-1, p.Size)
+//	if err != nil {
+//		return
+//	}
+//	postDetailList := make([]models.PostDetail, 0, len(posts))
+//	for _, post := range posts {
+//		// 获取username
+//		username, err := logic.GetUsernameById(post.AuthorID)
+//		if err != nil {
+//			zap.L().Error("get username by id failed", zap.Error(err))
+//			ResponseError(c, CODE_INTERNAL_ERROR)
+//			return
+//		}
+//		// 获取社区详细信息
+//		community, err := logic.GetCommunityById(post.CommunityID)
+//		if err != nil {
+//			zap.L().Error("get community by id failed", zap.Error(err))
+//			ResponseError(c, CODE_INTERNAL_ERROR)
+//			return
+//		}
+//		postDetail := models.PostDetail{
+//			AuthorName: username,
+//			Post:       &post,
+//			Community:  community,
+//		}
+//
+//		postDetailList = append(postDetailList, postDetail)
+//	}
+//	ResponseSuccess(c, &postDetailList)
+//
+//}
 
 // VoteForPost 为帖子点赞/取消点赞/点踩
 // @Summary 为帖子点赞/取消点赞/点踩
@@ -174,7 +193,7 @@ func GetPostList(c *gin.Context) {
 // @Param object body models.ParamVotePost true "post id,vote"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponseVotePost
-// @Router /api/v1/vote-post [post]
+// @Router /api/v1/post/vote [post]
 func VoteForPost(c *gin.Context) {
 	// 1. 解析参数，参数就设置为json格式，选取post_id 和 direction(-1 0 1) 分别代表 反对/取消/赞成
 	votePost := new(models.ParamVotePost)
@@ -199,8 +218,8 @@ func VoteForPost(c *gin.Context) {
 	ResponseSuccess(c, nil)
 }
 
-// GetPostList2 分页获取所有post升级版，可以根据community查询
-// @Summary 分页获取所有post升级版
+// GetPostList 分页获取所有post，可以根据community查询
+// @Summary 分页获取所有post
 // @Description 可按用户指定分页要求（若有）返回特定community的帖子列表
 // @Tags 帖子相关接口
 // @Produce application/json
@@ -208,8 +227,8 @@ func VoteForPost(c *gin.Context) {
 // @Param object query models.ParamPostList false "page, size"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponsePostDetail
-// @Router /api/v1/posts2 [get]
-func GetPostList2(c *gin.Context) {
+// @Router /api/v1/posts [get]
+func GetPostList(c *gin.Context) {
 	// 1.处理参数
 	param_list_query := new(models.ParamPostList)
 	err := c.ShouldBindQuery(param_list_query)
@@ -272,4 +291,58 @@ func GetPostList2(c *gin.Context) {
 		postDetailList = append(postDetailList, postDetail)
 	}
 	ResponseSuccess(c, &postDetailList)
+}
+
+// CollectPost 收藏帖子
+// @Summary 收藏帖子
+// @Description 收藏帖子
+// @Tags 帖子相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param post-id query string true "post id"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseCollectPost
+// @Router /api/v1/post/collect [post]
+func CollectPost(c *gin.Context) {
+	postId, err := strconv.ParseInt(c.Query("post-id"), 10, 64)
+	if err != nil {
+		zap.L().Error("Parse post id error", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	userId := c.GetInt64(ContextUserIdKey)
+
+	if err = logic.AddCollectPost(postId, userId); err != nil {
+		zap.L().Error("add collect post error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(c, nil)
+}
+
+// DeletePost 删除帖子
+// @Summary 删除帖子
+// @Description 删除帖子
+// @Tags 帖子相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param post-id query string true "post id"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseDeletePost
+// @Router /api/v1/post [delete]
+func DeletePost(c *gin.Context) {
+	postId, err := strconv.ParseInt(c.Query("post-id"), 10, 64)
+	if err != nil {
+		zap.L().Error("Parse post id error", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	userId := c.GetInt64(ContextUserIdKey)
+	if err = logic.DeletePost(postId, userId); err != nil {
+		zap.L().Error("Delete post error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+
+	ResponseSuccess(c, nil)
 }

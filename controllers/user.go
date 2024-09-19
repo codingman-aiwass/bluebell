@@ -103,7 +103,7 @@ func SignIn(context *gin.Context) {
 }
 
 // SignInViaEmail 处理账户登录
-// @Summary 实现用户登录功能
+// @Summary 实现用户通过邮箱验证码登录功能
 // @Description 接受用户输入的email，验证码，返回refresh-token 和 access-token
 // @Tags 用户相关接口
 // @Accept application/json

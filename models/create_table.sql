@@ -7,6 +7,7 @@ CREATE TABLE `t_user` (
     `email` varchar(64) COLLATE utf8mb4_general_ci,
     `gender` tinyint(4) NOT NULL DEFAULT '0',
     `verified` boolean DEFAULT FALSE ,
+    `status` tinyint(4) NOT NULL DEFAULT '0',
     `create_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `update_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE
         CURRENT_TIMESTAMP,

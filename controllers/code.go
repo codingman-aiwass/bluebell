@@ -9,6 +9,15 @@ import (
 
 type ResponseCode int
 
+const (
+	NORMAL_STATUS = iota
+	NOT_ALLOW_CREATE_POST
+)
+const (
+	EMAIL_NOT_VERIFIED = false
+	EMAIL_VERFIED      = true
+)
+
 const ContextUserIdKey = "user_id"
 const ContextUserNameKey = "username"
 const (
@@ -26,6 +35,7 @@ const (
 	CODE_VERIFY_ERROR
 	CODE_TOO_LONG_NOT_LOGIN
 	CODE_VERFICATION_CODE_ERROR
+	CODE_NOT_ALLOW_PUBLISH_POST
 )
 
 var code_to_msg = map[ResponseCode]string{
@@ -43,6 +53,7 @@ var code_to_msg = map[ResponseCode]string{
 	CODE_VERIFY_ERROR:           "verification error",
 	CODE_TOO_LONG_NOT_LOGIN:     "too long since last login",
 	CODE_VERFICATION_CODE_ERROR: "verification code error",
+	CODE_NOT_ALLOW_PUBLISH_POST: "not allow publish post",
 }
 
 func getMsg(code ResponseCode) string {

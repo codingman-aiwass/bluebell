@@ -37,6 +37,15 @@ type _ResponseVotePost struct {
 	Code ResponseCode `json:"code" example:"200"`   // 业务状态响应码
 	Msg  string       `json:"message" example:"ok"` // 提示信息
 }
+type _ResponseCollectPost struct {
+	Code ResponseCode `json:"code" example:"200"`   // 业务状态响应码
+	Msg  string       `json:"message" example:"ok"` // 提示信息
+}
+type _ResponseDeletePost struct {
+	Code ResponseCode `json:"code" example:"200"`   // 业务状态响应码
+	Msg  string       `json:"message" example:"ok"` // 提示信息
+}
+
 type _ResponseCommunities struct {
 	Code ResponseCode        `json:"code" example:"200"`   // 业务状态响应码
 	Msg  string              `json:"message" example:"ok"` // 提示信息

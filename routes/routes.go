@@ -39,11 +39,13 @@ func SetupRouter(mode string) *gin.Engine {
 	{
 		v1.GET("/post/:id", controllers.GetPostById)
 		v1.GET("/posts", controllers.GetPostList)
-		v1.GET("/posts2", controllers.GetPostList2)
+		//v1.GET("/posts2", controllers.GetPostList2)
 		v1.POST("/edit-info", controllers.EditUserInfo)
 		v1.POST("/post", controllers.CreatePost)
-		v1.POST("/vote-post", controllers.VoteForPost)
+		v1.POST("/post/vote", controllers.VoteForPost)
 		v1.POST("/send-email", controllers.SendEmail)
+		v1.POST("/post/collect", controllers.CollectPost)
+		v1.DELETE("/post", controllers.DeletePost)
 
 		// 测试jwt-token，使得只有登录了的用户才能访问ping接口
 		r.GET("/ping", middleware.JWTAuthMiddleware(), func(c *gin.Context) {

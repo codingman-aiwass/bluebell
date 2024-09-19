@@ -3,6 +3,7 @@ package redis_repo
 import (
 	"bluebell/models"
 	"errors"
+	"fmt"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"strconv"
@@ -15,7 +16,7 @@ func CheckPostExpired(postId string) (bool, error) {
 		zap.L().Error("redis_repo get post time error", zap.Error(err))
 		return true, err
 	}
-	if float64(time.Now().Unix())-t > POST_VALID_TIME {
+	if float64(time.Now().Unix())-t > float64(POST_VALID_TIME) {
 		return true, nil
 	}
 	return false, nil
@@ -44,6 +45,15 @@ func getPostScore(userId, postId string) (score float64, err error) {
 
 func SetPostScore(postId string, score float64) (err error) {
 	err = rdb.ZIncrBy(ctx, getKey(KeyPostScoreZset), score, postId).Err()
+	return
+}
+func SetPostVote(postId string, vote float64) (err error) {
+	err = rdb.ZIncrBy(ctx, getKey(KeyPostVoteZset), vote, postId).Err()
+	return
+}
+
+func SetPostDevote(postId string, vote float64) (err error) {
+	err = rdb.ZIncrBy(ctx, getKey(KeyPostDevoteZset), vote, postId).Err()
 	return
 }
 
@@ -115,4 +125,16 @@ func GetPostVote(ids []string, vote string) (result []int64, err error) {
 		result = append(result, val)
 	}
 	return result, nil
+}
+
+func DeletePostInfo(postId, communityId int64) (err error) {
+	pipe := rdb.TxPipeline()
+	pipe.ZRem(ctx, getKey(KeyPostVoteZset), postId)
+	pipe.ZRem(ctx, getKey(KeyPostDevoteZset), postId)
+	pipe.ZRem(ctx, getKey(KeyPostScoreZset), postId)
+	pipe.ZRem(ctx, getKey(KeyPostCommentZset), postId)
+	pipe.ZRem(ctx, fmt.Sprintf("%s:%d", getKey(KeyPostScoreZset), communityId), postId)
+	_, err = pipe.Exec(ctx)
+	return
+
 }
