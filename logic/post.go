@@ -39,6 +39,27 @@ func GetPostById(id int64) (post *models.Post, err error) {
 	return p, nil
 }
 
+// 返回帖子的其他详细信息，例如点赞数，评论数，浏览量
+func GetPostDetailedInfo1(postId int64) (yes_vote, comment_num, click_num int64) {
+	yes, err := redis_repo.GetPostVoteNumById(postId)
+	if err != nil {
+		yes = 0
+	}
+	comment, err := redis_repo.GetPostCommentNumById(postId)
+	if err != nil {
+		comment = 0
+	}
+
+	click, err := redis_repo.GetPostClickNumById(postId)
+	if err != nil {
+		click = 0
+	}
+	yes_vote = int64(yes)
+	comment_num = int64(comment)
+	click_num = int64(click)
+	return
+}
+
 func GetPosts(page int, size int) (posts []models.Post, err error) {
 	posts = mysql_repo.PostRepository.Find(sqls.DB(), sqls.NewCnd().Page(page, size))
 	if len(posts) == 0 {
@@ -64,7 +85,7 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	//}
 
 	// 需要从Redis中获取当前用户对该帖子的评分情况
-	oValue, err := redis_repo.GetUser2PostScore(strconv.Itoa(int(userId)), post.PostId)
+	oValue, err := redis_repo.GetUser2PostVoted(strconv.Itoa(int(userId)), post.PostId)
 	if err != nil {
 		zap.L().Error("get post score error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
 		return
@@ -75,32 +96,41 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	}
 
 	// 修改点赞数量
-	if post.Direction == 1 {
-		err = redis_repo.SetPostVote(post.PostId, 1)
-		if oValue == -1 {
-			// 取消点踩
-			err = redis_repo.SetPostDevote(post.PostId, -1)
-		}
-	} else if post.Direction == 0 {
-		if oValue == 1 {
-			// 取消点赞
-			err = redis_repo.SetPostVote(post.PostId, -1)
-		} else if oValue == -1 {
-			// 取消点踩
-			err = redis_repo.SetPostDevote(post.PostId, -1)
-		}
-	} else if post.Direction == -1 {
-		err = redis_repo.SetPostDevote(post.PostId, 1)
-		if oValue == 1 {
-			err = redis_repo.SetPostVote(post.PostId, -1)
-		}
-	}
+
+	//if post.Direction == 1 {
+	//	// 需要将bluebell:post:voted:postId 下该用户的记录设置为1
+	//	err = redis_repo.SetPostVote(post.PostId, 1)
+	//	if oValue == -1 {
+	//		// 取消点踩
+	//		err = redis_repo.SetPostDevote(post.PostId, -1)
+	//	}
+	//} else if post.Direction == 0 {
+	//	// 需要删除bluebell:post:voted:postId 下该用户的记录
+	//	if oValue == 1 {
+	//		// 取消点赞
+	//		err = redis_repo.SetPostVote(post.PostId, -1)
+	//	} else if oValue == -1 {
+	//		// 取消点踩
+	//		err = redis_repo.SetPostDevote(post.PostId, -1)
+	//	}
+	//} else if post.Direction == -1 {
+	//	// 需要将bluebell:post:voted:postId 下该用户的记录设置为-1
+	//	err = redis_repo.SetPostDevote(post.PostId, 1)
+	//	if oValue == 1 {
+	//		err = redis_repo.SetPostVote(post.PostId, -1)
+	//	}
+	//}
+
+	err = redis_repo.SetUser2PostVotedAndPostVoteNum(float64(post.Direction), oValue, post.PostId, strconv.FormatInt(userId, 10))
+
 	if err != nil {
 		zap.L().Error("error occur during modify redis post vote or devote...", zap.Error(err))
 		return err
 	}
 
-	// 修改评分
+	// 修改帖子点赞/点踩数量，和修改user目前点赞情况，都用SetUser2PostVotedAndPostVoteNum 在一个事务中处理了
+
+	// 修改评分（之前的根据点赞/点踩情况计算帖子评分，暂时废弃）
 	//diff := math.Abs(float64(post.Direction) - oValue)
 
 	//if post.Direction != 0 {
@@ -112,12 +142,13 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	//	zap.L().Error("set post score error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
 	//	return
 	//}
+
 	// 修改user目前点赞/点踩情况
-	err = redis_repo.SetUser2PostScore(strconv.Itoa(int(userId)), post.PostId, float64(post.Direction))
-	if err != nil {
-		zap.L().Error("update user score to redis_repo error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
-		return err
-	}
+	//err = redis_repo.SetUser2PostVoted(strconv.Itoa(int(userId)), post.PostId, float64(post.Direction))
+	//if err != nil {
+	//	zap.L().Error("update user score to redis_repo error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
+	//	return err
+	//}
 
 	return nil
 }
@@ -127,6 +158,8 @@ func GetPostsIds(param *models.ParamPostList) (ids []string, err error) {
 	return ids, err
 }
 
+// bluebell:post:voted:post_id 中存放了所有用户对这个帖子的点赞情况
+// bluebell:post:vote 记录了每个帖子的点赞数
 func GetPostVotes(ids []string, vote string) (result []int64, err error) {
 	// vote =  1  即为查询赞成票
 	// vote = -1  即为查询反对票

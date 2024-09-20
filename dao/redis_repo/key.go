@@ -14,6 +14,7 @@ const (
 	KeyPostDevoteZset     = "post:devote"             // zset 帖子点踩数量
 	KeyPostCollectionZset = "post:collection_numbers" // zset 帖子收藏数量
 	KeyPostCommentZset    = "post:comment_numbers"    // zset 帖子评论数量
+	KeyPostClickZset      = "post:click_numbers"      // zset 帖子浏览数量
 )
 
 func getKey(key string) string {

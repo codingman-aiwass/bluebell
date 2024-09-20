@@ -57,6 +57,13 @@ type ParamPostList struct {
 	Order       string `form:"order"`
 	CommunityId string `form:"community_id"`
 }
+
+type ParamPostList2 struct {
+	Page    int      `form:"page"`
+	Size    int      `form:"size"`
+	PostIds []string `form:"post_ids"`
+}
+
 type ParamCaptchaInfo struct {
 	Id   string `form:"captcha-id"`
 	Code string `form:"captcha-code"`
@@ -81,11 +88,14 @@ type Post struct {
 }
 
 type PostDetail struct {
-	AuthorName string `json:"author_name" db:"username"`
-	YesVotes   int64  `json:"yes_votes"`
-	NoVotes    int64  `json:"no_votes"`
-	*Post      `json:"post"`
-	*Community `json:"community"`
+	Title         string    `json:"title"`
+	AuthorName    string    `json:"author_name"`
+	YesVotes      int64     `json:"yes_votes"`
+	CommentNum    int64     `json:"comment_nums"`
+	ClickNums     int64     `json:"click_nums"`
+	Content       string    `json:"content"`
+	UpdateAt      time.Time `json:"update_at"`
+	CommunityName string    `json:"community_name,omitempty"`
 }
 
 type User struct {

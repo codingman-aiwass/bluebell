@@ -7,9 +7,12 @@ import (
 	"bluebell/pkg/snowflake"
 	"bluebell/pkg/sqls"
 	"bluebell/pkg/validation"
+	"bluebell/settings"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 	"strconv"
+	"strings"
 )
 
 // CreatePost 创建一个新的帖子
@@ -18,7 +21,7 @@ import (
 // @Tags 帖子相关接口
 // @Accept application/json
 // @Produce application/json
-// @Param Authorization header string false "Bearer 用户令牌"
+// @Param Authorization header string true "Bearer 用户令牌"
 // @Param object body models.ParamPostCreate true "需要创建帖子的详细信息"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponsePostCreate
@@ -108,9 +111,14 @@ func GetPostById(c *gin.Context) {
 		return
 	}
 
+	postDetail.Title = post.Title
 	postDetail.AuthorName = username
-	postDetail.Post = post
-	postDetail.Community = community
+	postDetail.Content = post.Content
+
+	postDetail.YesVotes, postDetail.CommentNum, postDetail.ClickNums = logic.GetPostDetailedInfo1(post.PostId)
+
+	postDetail.UpdateAt = post.UpdateAt
+	postDetail.CommunityName = community.CommunityName
 
 	ResponseSuccess(c, postDetail)
 
@@ -189,7 +197,7 @@ func GetPostById(c *gin.Context) {
 // @Tags 帖子相关接口
 // @Accept application/json
 // @Produce application/json
-// @Param Authorization header string false "Bearer 用户令牌"
+// @Param Authorization header string true "Bearer 用户令牌"
 // @Param object body models.ParamVotePost true "post id,vote"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponseVotePost
@@ -218,17 +226,17 @@ func VoteForPost(c *gin.Context) {
 	ResponseSuccess(c, nil)
 }
 
-// GetPostList 分页获取所有post，可以根据community查询
-// @Summary 分页获取所有post
-// @Description 可按用户指定分页要求（若有）返回特定community的帖子列表
+// GetPostList1 分页获取post简略信息
+// @Summary 分页获取post简略信息
+// @Description 可按用户指定分页要求（若有）返回特定community（若有）的post简略信息列表
 // @Tags 帖子相关接口
 // @Produce application/json
 // @Param Authorization header string false "Bearer 用户令牌"
 // @Param object query models.ParamPostList false "page, size"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponsePostDetail
-// @Router /api/v1/posts [get]
-func GetPostList(c *gin.Context) {
+// @Router /api/v1/posts1 [get]
+func GetPostList1(c *gin.Context) {
 	// 1.处理参数
 	param_list_query := new(models.ParamPostList)
 	err := c.ShouldBindQuery(param_list_query)
@@ -240,22 +248,22 @@ func GetPostList(c *gin.Context) {
 
 	// 2.业务逻辑处理
 	// 从redis中获取id列表，再根据这个id列表去redis中获取点赞/反对的数量
-	ids, err := logic.GetPostsIds(param_list_query)
-	if err != nil {
-		zap.L().Error("get posts ids from redis_repo failed", zap.Error(err))
-		ResponseError(c, CODE_INTERNAL_ERROR)
-		return
-	}
-	yes_vote, err := logic.GetPostVotes(ids, "1")
-	if err != nil {
-		zap.L().Error("get post yes votes failed", zap.Error(err))
-		ResponseError(c, CODE_INTERNAL_ERROR)
-	}
-	no_vote, err := logic.GetPostVotes(ids, "-1")
-	if err != nil {
-		zap.L().Error("get post no votes failed", zap.Error(err))
-		ResponseError(c, CODE_INTERNAL_ERROR)
-	}
+	//ids, err := logic.GetPostsIds(param_list_query)
+	//if err != nil {
+	//	zap.L().Error("get posts ids from redis_repo failed", zap.Error(err))
+	//	ResponseError(c, CODE_INTERNAL_ERROR)
+	//	return
+	//}
+	//yes_vote, err := logic.GetPostVotes(ids, "1")
+	//if err != nil {
+	//	zap.L().Error("get post yes votes failed", zap.Error(err))
+	//	ResponseError(c, CODE_INTERNAL_ERROR)
+	//}
+	//no_vote, err := logic.GetPostVotes(ids, "-1")
+	//if err != nil {
+	//	zap.L().Error("get post no votes failed", zap.Error(err))
+	//	ResponseError(c, CODE_INTERNAL_ERROR)
+	//}
 
 	// 获取post详细信息
 	posts, err := logic.GetPostsWithOrder(param_list_query)
@@ -265,7 +273,7 @@ func GetPostList(c *gin.Context) {
 		return
 	}
 	postDetailList := make([]models.PostDetail, 0, len(posts))
-	for idx, post := range posts {
+	for _, post := range posts {
 		// 获取username
 		username, err := logic.GetUsernameById(post.AuthorID)
 		if err != nil {
@@ -274,23 +282,83 @@ func GetPostList(c *gin.Context) {
 			return
 		}
 		// 获取社区详细信息
-		community, err := logic.GetCommunityById(post.CommunityID)
-		if err != nil {
-			zap.L().Error("get community by id failed", zap.Error(err))
-			ResponseError(c, CODE_INTERNAL_ERROR)
-			return
+		//community, err := logic.GetCommunityById(post.CommunityID)
+		//if err != nil {
+		//	zap.L().Error("get community by id failed", zap.Error(err))
+		//	ResponseError(c, CODE_INTERNAL_ERROR)
+		//	return
+		//}
+
+		// 获取点赞/评论/浏览数
+		voteNum, commentNum, _ := logic.GetPostDetailedInfo1(post.PostId)
+		var content string
+		if len(post.Content) > 50 {
+			content = post.Content[:50]
+		} else {
+			content = post.Content
 		}
 		postDetail := models.PostDetail{
+			Title:      post.Title,
 			AuthorName: username,
-			YesVotes:   yes_vote[idx],
-			NoVotes:    no_vote[idx],
-			Post:       &post,
-			Community:  community,
+			Content:    content,
+			YesVotes:   voteNum,
+			CommentNum: commentNum,
 		}
 
 		postDetailList = append(postDetailList, postDetail)
 	}
-	ResponseSuccess(c, &postDetailList)
+	ResponseSuccess(c, postDetailList)
+}
+
+// GetPostList2 分页获取post更简略信息（类似CSDN评论区下的帖子推荐）
+// @Summary 分页获取post更简略信息
+// @Description 分页获取post更简略信息（类似CSDN评论区下的帖子推荐）
+// @Tags 帖子相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param object query models.ParamPostList2 false "page, size"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponsePostDetail
+// @Router /api/v1/posts2 [get]
+func GetPostList2(c *gin.Context) {
+	// 1.处理参数
+	param_list_query := new(models.ParamPostList2)
+	err := c.ShouldBindQuery(param_list_query)
+	if err != nil {
+		zap.L().Error("bind post list query failed", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	ids := param_list_query.PostIds[0]
+	param_list_query.PostIds = strings.Split(ids, ",")
+
+	// 2.根据ids获取需要的展示post信息
+	var postDetails []models.PostDetail
+	for _, id := range param_list_query.PostIds {
+		id_, _ := strconv.ParseInt(id, 10, 64)
+		post, err := logic.GetPostById(id_)
+		username, _ := logic.GetUsernameById(post.AuthorID)
+		// 获取点赞/评论/浏览数
+		_, _, click := logic.GetPostDetailedInfo1(post.PostId)
+		if err == nil {
+			var content string
+			if len(post.Content) < 20 {
+				content = post.Content
+			} else {
+				content = post.Content[:20]
+			}
+			postDetail := models.PostDetail{
+				Title:      post.Title,
+				AuthorName: username,
+				Content:    content,
+				ClickNums:  click,
+				UpdateAt:   post.UpdateAt,
+			}
+			postDetails = append(postDetails, postDetail)
+		}
+	}
+	ResponseSuccess(c, postDetails)
+
 }
 
 // CollectPost 收藏帖子
@@ -298,7 +366,7 @@ func GetPostList(c *gin.Context) {
 // @Description 收藏帖子
 // @Tags 帖子相关接口
 // @Produce application/json
-// @Param Authorization header string false "Bearer 用户令牌"
+// @Param Authorization header string true "Bearer 用户令牌"
 // @Param post-id query string true "post id"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponseCollectPost
@@ -325,7 +393,7 @@ func CollectPost(c *gin.Context) {
 // @Description 删除帖子
 // @Tags 帖子相关接口
 // @Produce application/json
-// @Param Authorization header string false "Bearer 用户令牌"
+// @Param Authorization header string true "Bearer 用户令牌"
 // @Param post-id query string true "post id"
 // @Security ApiKeyAuth
 // @Success 200 {object} _ResponseDeletePost
@@ -345,4 +413,25 @@ func DeletePost(c *gin.Context) {
 	}
 
 	ResponseSuccess(c, nil)
+}
+
+// GetPostLink 获取帖子分享链接
+// @Summary 获取帖子分享链接
+// @Description 获取帖子分享链接
+// @Tags 帖子相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param post-id query string true "post id"
+// @Security ApiKeyAuth
+// @Router /api/v1/post/link [get]
+func GetPostLink(c *gin.Context) {
+	postId, err := strconv.ParseInt(c.Query("post-id"), 10, 64)
+	if err != nil {
+		zap.L().Error("Parse post id error", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	url := fmt.Sprintf("%s:%d/api/v1/post/%d",
+		settings.GlobalSettings.AppCfg.Host, settings.GlobalSettings.AppCfg.Port, postId)
+	ResponseSuccess(c, url)
 }

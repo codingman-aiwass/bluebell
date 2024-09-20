@@ -24,9 +24,9 @@ type _ResponsePostCreate struct {
 }
 
 type _ResponsePostDetail struct {
-	Code     ResponseCode `json:"code" example:"200"`   // 业务状态响应码
-	Msg      string       `json:"message" example:"ok"` // 提示信息
-	PostInfo models.Post  `json:"post_info"`            // post list
+	Code     ResponseCode        `json:"code" example:"200"`   // 业务状态响应码
+	Msg      string              `json:"message" example:"ok"` // 提示信息
+	PostInfo []models.PostDetail `json:"post_info"`            // post list
 }
 type _ResponsePostList struct {
 	Code    ResponseCode   `json:"code" example:"200"`   // 业务响应状态码

@@ -34,12 +34,15 @@ func SetupRouter(mode string) *gin.Engine {
 		captchas.GET("/request", controllers.GetCaptchaInfo)
 		captchas.GET("/show", controllers.GetShow)
 		captchas.GET("/verify", middleware.NonBlockingRateLimitMiddleware(60), controllers.GetVerify)
+
+		v1.GET("/post/link", controllers.GetPostLink)
+		v1.GET("/posts1", controllers.GetPostList1)
+		v1.GET("/posts2", controllers.GetPostList2)
+		v1.GET("/post/:id", controllers.GetPostById)
 	}
 	v1.Use(middleware.JWTAuthMiddleware())
 	{
-		v1.GET("/post/:id", controllers.GetPostById)
-		v1.GET("/posts", controllers.GetPostList)
-		//v1.GET("/posts2", controllers.GetPostList2)
+
 		v1.POST("/edit-info", controllers.EditUserInfo)
 		v1.POST("/post", controllers.CreatePost)
 		v1.POST("/post/vote", controllers.VoteForPost)
