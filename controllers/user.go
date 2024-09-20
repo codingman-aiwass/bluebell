@@ -20,7 +20,7 @@ import (
 // @Accept application/json
 // @Produce application/json
 // @Param object body models.ParamUserSignUp true "注册信息"
-// @Success 200 {object} _ResponseUserSignUp
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/signup [post]
 func SignUp(context *gin.Context) {
 	// 1. 参数校验
@@ -244,7 +244,7 @@ func RefreshAccessToken(c *gin.Context) {
 // @Produce application/json
 // @Param Authorization header string false "Bearer 用户令牌"
 // @Security ApiKeyAuth
-// @Success 200 {object} _ResponseUserSendEmail
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/send-email [post]
 func SendEmail(c *gin.Context) {
 	// 需要获取当前用户的邮箱，然后生成一个验证链接，发送到用户邮箱
@@ -270,7 +270,7 @@ func SendEmail(c *gin.Context) {
 // @Tags 用户相关接口
 // @Produce application/json
 // @Param info query string true "info"
-// @Success 200 {object} _ResponseUserVerifyEmail
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/verify-email [get]
 func VerifyEmail(c *gin.Context) {
 	// 传入参数是info

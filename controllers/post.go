@@ -24,7 +24,7 @@ import (
 // @Param Authorization header string true "Bearer 用户令牌"
 // @Param object body models.ParamPostCreate true "需要创建帖子的详细信息"
 // @Security ApiKeyAuth
-// @Success 200 {object} _ResponsePostCreate
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/post [post]
 func CreatePost(c *gin.Context) {
 	// 1. 获取绑定的参数
@@ -200,7 +200,7 @@ func GetPostById(c *gin.Context) {
 // @Param Authorization header string true "Bearer 用户令牌"
 // @Param object body models.ParamVotePost true "post id,vote"
 // @Security ApiKeyAuth
-// @Success 200 {object} _ResponseVotePost
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/post/vote [post]
 func VoteForPost(c *gin.Context) {
 	// 1. 解析参数，参数就设置为json格式，选取post_id 和 direction(-1 0 1) 分别代表 反对/取消/赞成
@@ -369,7 +369,7 @@ func GetPostList2(c *gin.Context) {
 // @Param Authorization header string true "Bearer 用户令牌"
 // @Param post-id query string true "post id"
 // @Security ApiKeyAuth
-// @Success 200 {object} _ResponseCollectPost
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/post/collect [post]
 func CollectPost(c *gin.Context) {
 	postId, err := strconv.ParseInt(c.Query("post-id"), 10, 64)
@@ -396,7 +396,7 @@ func CollectPost(c *gin.Context) {
 // @Param Authorization header string true "Bearer 用户令牌"
 // @Param post-id query string true "post id"
 // @Security ApiKeyAuth
-// @Success 200 {object} _ResponseDeletePost
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/post [delete]
 func DeletePost(c *gin.Context) {
 	postId, err := strconv.ParseInt(c.Query("post-id"), 10, 64)
