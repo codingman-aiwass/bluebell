@@ -24,3 +24,16 @@ func CheckPost(user *models.User, post *models.Post) error {
 	}
 	return nil
 }
+
+func CheckComment(user *models.User, comment *models.Comment) error {
+	if len(strategies) == 0 {
+		return nil
+	}
+	for _, strategy := range strategies {
+		if err := strategy.CheckComment(user, comment); err != nil {
+			zap.L().Error(fmt.Sprintf("[Post] hit strategy:%s", strategy.Name()), zap.Error(err))
+			return err
+		}
+	}
+	return nil
+}

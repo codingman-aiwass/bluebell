@@ -54,7 +54,7 @@ func GetShow(c *gin.Context) {
 // @Description 检查验证码是否正确
 // @Tags 验证码相关接口
 // @Param object query models.ParamCaptchaInfo false "captchaId, captchaCode"
-// @Success 200 {object} _ResponseCaptchaVerification
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/captcha/verify [get]
 func GetVerify(c *gin.Context) {
 	// 1.处理参数

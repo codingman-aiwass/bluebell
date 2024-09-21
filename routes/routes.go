@@ -49,6 +49,9 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.POST("/send-email", controllers.SendEmail)
 		v1.POST("/post/collect", controllers.CollectPost)
 		v1.DELETE("/post", controllers.DeletePost)
+		v1.POST("/comment", controllers.CreateComment)
+		v1.POST("/comment/vote", controllers.VoteForComment)
+		v1.DELETE("/comment", controllers.DeleteComment)
 
 		// 测试jwt-token，使得只有登录了的用户才能访问ping接口
 		r.GET("/ping", middleware.JWTAuthMiddleware(), func(c *gin.Context) {

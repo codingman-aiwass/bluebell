@@ -21,7 +21,7 @@ type ParamUserSignUp struct {
 }
 
 type ParamUserSignIn struct {
-	Username    string `json:"username" validate:"omitempty,maxoneempty"`
+	Username    string `json:"username" binding:"required"`
 	Password    string `json:"password" binding:"required"`
 	CaptchaId   string `json:"captcha-id" binding:"required"`
 	CaptchaCode string `json:"captcha-code" binding:"required"`
@@ -67,6 +67,17 @@ type ParamPostList2 struct {
 type ParamCaptchaInfo struct {
 	Id   string `form:"captcha-id"`
 	Code string `form:"captcha-code"`
+}
+
+type ParamCreateComment struct {
+	PostId          int64  `json:"post-id,string" binding:"required"`
+	ParentCommentId int64  `json:"parent-comment-id,string"`
+	Content         string `json:"content" binding:"required"`
+}
+
+type ParamVoteComment struct {
+	CommentId int64 `json:"comment-id,string" binding:"required"`
+	Direction int8  `json:"direction" binding:"required,oneof=0 1 -1"`
 }
 
 type Model struct {
@@ -123,7 +134,7 @@ type Comment struct {
 	CommentId       int64     `gorm:"size:64;not null;uniqueIndex:idx_comment_id;column:comment_id" json:"id,string"`
 	PostId          int64     `gorm:"size:64;not null;index;column:post_id" json:"post_id,string"`
 	UserId          int64     `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
-	ParentCommentId *int64    `gorm:"size:64;index;column:parent_comment_id" json:"parent_comment_id,string"`
+	ParentCommentId int64     `gorm:"size:64;index;column:parent_comment_id" json:"parent_comment_id,string"`
 	Content         string    `gorm:"size:8192;type:varchar(8192);not null;column:content" json:"content"`
 	UpdateAt        time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;column:update_at" json:"update_at"`
 

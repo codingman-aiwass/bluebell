@@ -85,9 +85,9 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	//}
 
 	// 需要从Redis中获取当前用户对该帖子的评分情况
-	oValue, err := redis_repo.GetUser2PostVoted(strconv.Itoa(int(userId)), post.PostId)
+	oValue, err := redis_repo.GetUser2PostVoted(strconv.FormatInt(userId, 10), post.PostId)
 	if err != nil {
-		zap.L().Error("get post score error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
+		zap.L().Error("get post voted error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
 		return
 	}
 	// 如果原值和新值相同，不做处理
@@ -237,4 +237,39 @@ func DeletePost(postId, userId int64) (err error) {
 		return err
 	}
 	return nil
+}
+
+// GetBlackList 获取帖子作者的黑名单
+func GetBlackList(postId int64) (blackList []string, err error) {
+	// 首先获取帖子的作者
+	post, err := GetPostById(postId)
+	if err != nil {
+		zap.L().Error("fail to find post via postId", zap.Error(err))
+		return nil, err
+	}
+
+	// 根据帖子作者ID获取它的黑名单
+	blackList, err = redis_repo.GetBlackListById(ctx, post.AuthorID)
+	if err != nil {
+		zap.L().Error("fail to get blacklist via author id", zap.Error(err))
+		return nil, err
+	}
+
+	return blackList, nil
+}
+
+// CheckInBlacklist 判断userId1是否在post作者的黑名单上
+func CheckInBlacklist(userId, postId int64) (res bool, err error) {
+	// 首先获取帖子的作者
+	post, err := GetPostById(postId)
+	if err != nil {
+		zap.L().Error("fail to find post via postId", zap.Error(err))
+		return
+	}
+	res, err = redis_repo.CheckInBlackList(ctx, strconv.FormatInt(userId, 10), strconv.FormatInt(post.AuthorID, 10))
+	if err != nil {
+		zap.L().Error("fail to run redis_repo.CheckInBlackList", zap.Error(err))
+		return
+	}
+	return res, nil
 }

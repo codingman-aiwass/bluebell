@@ -31,7 +31,7 @@ const (
 	EMAIL_VERIFIED     = true
 )
 const (
-	AccessTokenExpireDuration  = time.Hour * 2
+	AccessTokenExpireDuration  = time.Hour * 200000
 	RefreshTokenExpireDuration = time.Hour * 24 * 7
 	//LoginTokenExpireDuration    = time.Hour * 24 * 30 * 12
 	EMAIL_VERIFICATION_CODE_LEN = 6

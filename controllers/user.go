@@ -177,7 +177,7 @@ func GetVerificationCode(context *gin.Context) {
 // @Param object body models.ParamUserEditInfo true "用户修改信息"
 // @Param Authorization header string false "Bearer 用户令牌"
 // @Security ApiKeyAuth
-// @Success 200 {object} _ResponseUserEditInfo
+// @Success 200 {object} _GeneralResponse
 // @Router /api/v1/edit-info [post]
 func EditUserInfo(c *gin.Context) {
 	info := new(models.ParamUserEditInfo)
