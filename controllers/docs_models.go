@@ -41,3 +41,15 @@ type _ResponseCaptchaInfo struct {
 	Msg  string       `json:"message" example:"ok"` // 提示信息
 	Data []string     `json:"data"`                 // catpcha id and url
 }
+
+type _ResponseComments struct {
+	Code ResponseCode             `json:"code" example:"200"`   // 业务状态响应码
+	Msg  string                   `json:"message" example:"ok"` // 提示信息
+	Data []models.ResponseComment `json:"data"`                 // comments
+}
+
+type _ResponseCount struct {
+	Code ResponseCode `json:"code" example:"200"`   // 业务状态响应码
+	Msg  string       `json:"message" example:"ok"` // 提示信息
+	Data int64        `json:"data"`                 // 计数
+}

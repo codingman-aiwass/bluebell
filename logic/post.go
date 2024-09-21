@@ -236,6 +236,8 @@ func DeletePost(postId, userId int64) (err error) {
 		zap.L().Error("fail to delete post related info in mysql", zap.Error(err))
 		return err
 	}
+	// 清除post缓存
+	cache.PostCache.Invalidate(postId)
 	return nil
 }
 

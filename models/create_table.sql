@@ -72,7 +72,7 @@ CREATE TABLE `t_comment`(
     `parent_comment_id` bigint(64) NULL, -- NULL if it's a comment on the post, or the id of the comment it replies to
     `content` varchar(8192) COLLATE utf8mb4_general_ci NOT NULL,
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `update_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_comment_id`(`comment_id`),
 #     FOREIGN KEY (post_id) REFERENCES t_post(post_id),

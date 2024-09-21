@@ -39,6 +39,11 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.GET("/posts1", controllers.GetPostList1)
 		v1.GET("/posts2", controllers.GetPostList2)
 		v1.GET("/post/:id", controllers.GetPostById)
+		v1.GET("/comment/by-post-id", controllers.GetCommentByPostId)
+		v1.GET("/comment/total-count", controllers.GetTotalCommentsCount)
+		v1.GET("/comment/sub-comments-count", controllers.GetSubCommentsCount)
+		v1.GET("/comment/comment-detail", controllers.GetCommentsDetail)
+
 	}
 	v1.Use(middleware.JWTAuthMiddleware())
 	{

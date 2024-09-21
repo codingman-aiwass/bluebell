@@ -80,6 +80,20 @@ type ParamVoteComment struct {
 	Direction int8  `json:"direction" binding:"required,oneof=0 1 -1"`
 }
 
+type ParamGetCommentByPostId struct {
+	Page   int    `form:"page"`
+	Size   int    `form:"size"`
+	PostId string `form:"post_id"`
+}
+type ResponseComment struct {
+	Username   string            `json:"username"`
+	Content    string            `json:"content"`
+	UpdateAt   time.Time         `json:"update-at,omitempty"`
+	VoteNum    int               `json:"vote-num"`
+	ReplyTo    string            `json:"reply-to,omitempty"`
+	SubComment []ResponseComment `json:"sub-comment,omitempty"`
+}
+
 type Model struct {
 	Id       int64          `gorm:"size:64;primaryKey;autoIncrement;column:id" json:"id"`
 	CreateAt time.Time      `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP;column:create_at" json:"create_at"`

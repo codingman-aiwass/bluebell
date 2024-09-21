@@ -208,3 +208,65 @@ func DeleteCommentInfo(commentId, rootCommentId, postId int64, relatedCommentIds
 
 	return
 }
+
+func GetAllRootComment(postId string) (res []string, err error) {
+	res, err = rdb.SMembers(ctx, getKey(KeyPostPrefix+postId)).Result()
+	if err != nil {
+		zap.L().Error("redis_repo.GetAllRootComment() error", zap.Error(err))
+		return nil, err
+	}
+	return res, nil
+}
+
+func GetSubCommentIdsByRootComment(rootCommentId string) (res []string, err error) {
+	var queue []string
+	queue = append(queue, rootCommentId)
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		res = append(res, cur)
+		tmp, err := rdb.SMembers(ctx, getKey(KeyCommentSubCommentSet)+":"+cur).Result()
+		if err != nil {
+			zap.L().Error("redis_repo.GetSubCommentsByRootComment() error ", zap.Error(err))
+			return nil, err
+		}
+		queue = append(queue, tmp...)
+	}
+	return res, nil
+}
+
+func GetCommentVoteNumById(commentId string) (res int, err error) {
+	r, err := rdb.ZScore(ctx, getKey(KeyCommentVoteZset), commentId).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	} else if err == nil {
+		return int(r), nil
+	} else {
+		zap.L().Error("redis_repo.GetCommentVoteNumById error", zap.Error(err))
+		return -1, err
+	}
+}
+
+func GetTotalCommentCountOfAPost(postId string) (res int, err error) {
+	r, err := rdb.ZScore(ctx, getKey(KeyPostCommentZset), postId).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	} else if err == nil {
+		return int(r), nil
+	} else {
+		zap.L().Error("redis_repo.GetTotalCommentCountOfAPost error", zap.Error(err))
+		return -1, err
+	}
+}
+
+func GetSubCommentsCountOfAComment(commentId string) (res int, err error) {
+	r, err := rdb.ZScore(ctx, getKey(KeyCommentSubCommentCntZset), commentId).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	} else if err == nil {
+		return int(r), nil
+	} else {
+		zap.L().Error("redis_repo.GetSubCommentsCountOfAComment error", zap.Error(err))
+		return -1, err
+	}
+}

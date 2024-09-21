@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"bluebell/dao/mysql_repo"
+	"bluebell/dao/redis_repo"
 	"bluebell/logic"
 	"bluebell/models"
 	"bluebell/pkg/snowflake"
@@ -125,4 +126,137 @@ func DeleteComment(c *gin.Context) {
 	}
 
 	ResponseSuccess(c, nil)
+}
+
+// GetCommentByPostId 根据post id分页获取其下的所有评论
+// @Summary 根据post id分页获取其下的所有评论
+// @Description 根据post id分页获取其下的所有评论
+// @Tags 评论相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param object query models.ParamGetCommentByPostId true "page size post id"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseComments
+// @Router /api/v1/comment/by-post-id [get]
+func GetCommentByPostId(c *gin.Context) {
+	query := new(models.ParamGetCommentByPostId)
+	err := c.ShouldBindQuery(query)
+	if err != nil {
+		zap.L().Error("bind get comment by post id  query failed", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	// 从bluebell:post:[post-id]中找到所有的根评论
+	// 在根据这些根评论，去bluebell:comment:child_comment_record:[comment-id]中找出所有的子评论
+	// 采用BFS的策略
+	commentss, err := logic.GetCommentListByPostId(query)
+	if err != nil {
+		zap.L().Error("get comments and sub comments error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	// comments是一个二维数组，每个数组的第一个元素是根评论，后面的是子评论
+	// 根评论需要显示用户名/评论内容/时间/点赞数
+	// 子评论显示用户名/评论内容
+	ResponseArr := make([]models.ResponseComment, len(commentss))
+	for i, comments := range commentss {
+		username, err := logic.GetUsernameById(comments[0].UserId)
+		if err != nil {
+			zap.L().Error("get username by user id error", zap.Error(err))
+			ResponseError(c, CODE_INTERNAL_ERROR)
+			return
+		}
+		voteNum, err := redis_repo.GetCommentVoteNumById(strconv.FormatInt(comments[0].CommentId, 10))
+		if err != nil {
+			zap.L().Error("get vote num by comment id error", zap.Error(err))
+			ResponseError(c, CODE_INTERNAL_ERROR)
+			return
+		}
+		ResponseArr[i].Username = username
+		ResponseArr[i].Content = comments[0].Content
+		ResponseArr[i].UpdateAt = comments[0].UpdateAt
+		ResponseArr[i].VoteNum = voteNum
+		ResponseArr[i].SubComment = make([]models.ResponseComment, len(comments)-1)
+		for j := 1; j < len(comments); j++ {
+			username, err = logic.GetUsernameById(comments[j].UserId)
+			if err != nil {
+				zap.L().Error("get username by user id error", zap.Error(err))
+				ResponseError(c, CODE_INTERNAL_ERROR)
+				return
+			}
+			ResponseArr[i].SubComment[j-1].Username = username
+			ResponseArr[i].SubComment[j-1].Content = comments[j].Content
+		}
+	}
+	ResponseSuccess(c, ResponseArr)
+}
+
+// GetTotalCommentsCount 根据post id，获取该post下所有的评论总数
+// @Summary 根据post id，获取该post下所有的评论总数
+// @Description 根据post id，获取该post下所有的评论总数
+// @Tags 评论相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param post-id query string true "post id"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseCount
+// @Router /api/v1/comment/total-count [get]
+func GetTotalCommentsCount(c *gin.Context) {
+	postId := c.Query("post-id")
+	cnt, err := redis_repo.GetTotalCommentCountOfAPost(postId)
+	if err != nil {
+		zap.L().Error("get total comment count of a post error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(c, cnt)
+}
+
+// GetSubCommentsCount 根据comment id，获取该comment下所有的评论总数
+// @Summary 根据comment id，获取该comment下所有的评论总数
+// @Description 根据comment，获取该comment下所有的评论总数
+// @Tags 评论相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param comment-id query string true "comment id"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseCount
+// @Router /api/v1/comment/sub-comments-count [get]
+func GetSubCommentsCount(c *gin.Context) {
+	commentId := c.Query("comment-id")
+	cnt, err := redis_repo.GetSubCommentsCountOfAComment(commentId)
+	if err != nil {
+		zap.L().Error("get total comment count of a post error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(c, cnt)
+}
+
+// GetCommentsDetail 根据comment id，获取该comment的详细信息
+// @Summary 根据comment id，获取该comment的详细信息
+// @Description 根据comment，获取该comment的详细信息
+// @Tags 评论相关接口
+// @Produce application/json
+// @Param Authorization header string false "Bearer 用户令牌"
+// @Param comment-id query string true "comment id"
+// @Security ApiKeyAuth
+// @Success 200 {object} _ResponseComments
+// @Router /api/v1/comment/comment-detail [get]
+func GetCommentsDetail(c *gin.Context) {
+	commentId := c.Query("comment-id")
+	id, err := strconv.ParseInt(commentId, 10, 64)
+	if err != nil {
+		zap.L().Error("parse integer error", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	res, err := logic.GetCommentDetail(id)
+	if err != nil {
+		zap.L().Error("get comment detail error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(c, res)
+
 }
