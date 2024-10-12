@@ -1,7 +1,6 @@
 package models
 
 import (
-	"errors"
 	"gorm.io/gorm"
 	"time"
 )
@@ -38,7 +37,7 @@ type ParamUserEditInfo struct {
 
 type ParamVotePost struct {
 	PostId    string `json:"post_id" binding:"required"`
-	Direction int8   `json:"direction" binding:"required,oneof=0 1 -1"`
+	Direction *int8  `json:"direction" binding:"required,oneof=0 1 2"`
 }
 type ParamPostCreate struct {
 	Title       string `json:"title" binding:"required"`
@@ -102,12 +101,18 @@ type Model struct {
 
 type Post struct {
 	Model
-	PostId      int64  `gorm:"size:64;not null;uniqueIndex:idx_post_id;column:post_id" json:"id,string"`
-	AuthorID    int64  `gorm:"index:idx_author_id;size:64;not null;column:author_id" json:"author_id,string"`
-	CommunityID int64  `gorm:"index:idx_community_id;column:community_id;size:64;not null" json:"community_id,string" binding:"required"`
-	Status      int32  `gorm:"size:4;not null;column:status" json:"status"`
-	Title       string `gorm:"size:128;not null;column:title" json:"title" binding:"required"`
-	Content     string `gorm:"size:8192;not null;column:content" json:"content" binding:"required"`
+	PostId       int64  `gorm:"size:64;not null;uniqueIndex:idx_post_id;column:post_id" json:"post_id,string"`
+	AuthorID     int64  `gorm:"index:idx_author_id;size:64;not null;column:author_id" json:"author_id,string"`
+	CommunityID  int64  `gorm:"index:idx_community_id;column:community_id;size:64;not null" json:"community_id,string" binding:"required"`
+	Status       int32  `gorm:"size:4;not null;column:status" json:"status"`
+	Title        string `gorm:"size:128;not null;column:title" json:"title" binding:"required"`
+	Content      string `gorm:"size:8192;not null;column:content" json:"content" binding:"required"`
+	ClickNums    int64  `gorm:"size:64;default:0;column:click_nums" json:"click_nums,string"`
+	CollectNums  int64  `gorm:"size:64;default:0;column:collect_nums" json:"collect_nums,string"`
+	CommentNums  int64  `gorm:"size:64;default:0;column:comment_nums" json:"comment_nums,string"`
+	VoteUpNums   int64  `gorm:"size:64;default:0;column:vote_up_nums" json:"vote_up_nums,string"`
+	VoteDownNums int64  `gorm:"size:64;default:0;column:vote_down_nums" json:"vote_down_nums,string"`
+	Score        int64  `gorm:"size:64;default:0;column:score" json:"score,string"`
 
 	UpdateAt time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;;column:update_at" json:"update_at"`
 }
@@ -137,7 +142,7 @@ type User struct {
 
 type Community struct {
 	Model
-	CommunityId   int64     `gorm:"size:64;not null;uniqueIndex:idx_community_id;column:community_id" json:"id,string"`
+	CommunityId   int64     `gorm:"size:64;not null;uniqueIndex:idx_community_id;column:community_id" json:"community_id,string"`
 	CommunityName string    `gorm:"size:128;not null;uniqueIndex:idx_community_name;column:community_name" json:"community_name"`
 	Introduction  string    `gorm:"size:256;not null;column:introduction" json:"introduction,omitempty"`
 	UpdateAt      time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;column:update_at" json:"update_at"`
@@ -145,13 +150,19 @@ type Community struct {
 
 type Comment struct {
 	Model
-	CommentId       int64     `gorm:"size:64;not null;uniqueIndex:idx_comment_id;column:comment_id" json:"id,string"`
+	CommentId       int64     `gorm:"size:64;not null;uniqueIndex:idx_comment_id;column:comment_id" json:"comment_id,string"`
 	PostId          int64     `gorm:"size:64;not null;index;column:post_id" json:"post_id,string"`
 	UserId          int64     `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
 	ParentCommentId int64     `gorm:"size:64;index;column:parent_comment_id" json:"parent_comment_id,string"`
 	Content         string    `gorm:"size:8192;type:varchar(8192);not null;column:content" json:"content"`
 	UpdateAt        time.Time `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP;column:update_at" json:"update_at"`
 
+	RootCommentId int64 `gorm:"size:64;index;column:root_comment_id" json:"root_comment_id,string"`
+	ClickNums     int64 `gorm:"size:64;default:0;column:click_nums" json:"click_nums,string"`
+	CommentNums   int64 `gorm:"size:64;default:0;column:comment_nums" json:"comment_nums,string"`
+	VoteUpNums    int64 `gorm:"size:64;default:0;column:vote_up_nums" json:"vote_up_nums,string"`
+	VoteDownNums  int64 `gorm:"size:64;default:0;column:vote_down_nums" json:"vote_down_nums,string"`
+	Score         int64 `gorm:"size:64;default:0;column:score" json:"score,string"`
 	// Relationships
 	//Post          Post      `gorm:"foreignKey:PostId;references:PostId"`
 	//User          User      `gorm:"foreignKey:UserId;references:UserId"`
@@ -161,10 +172,11 @@ type Comment struct {
 
 type Like struct {
 	Model
-	LikeId    int64 `gorm:"size:64;not null;uniqueIndex:idx_like_id;column:like_id" json:"id,string"`
-	UserId    int64 `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
-	PostId    int64 `gorm:"size:64;null;index;column:post_id" json:"post_id,string"`
-	CommentId int64 `gorm:"size:64;null;index;column:comment_id" json:"comment_id,string"`
+	LikeId int64 `gorm:"size:64;not null;uniqueIndex:idx_like_id;column:like_id" json:"id,string"`
+	UserId int64 `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
+	PostId int64 `gorm:"size:64;null;index;column:post_id" json:"post_id,string"`
+	Val    int8  `gorm:"size:4;null;index;column:val" json:"val"`
+	//CommentId int64 `gorm:"size:64;null;index;column:comment_id" json:"comment_id,string"`
 
 	// Relationships
 	//User    User     `gorm:"foreignKey:UserId;references:UserId"`
@@ -172,17 +184,28 @@ type Like struct {
 	//Comment *Comment `gorm:"foreignKey:CommentId;references:CommentId"`
 }
 
-// Custom validation logic to enforce CHECK constraint
-func (like *Like) BeforeSave(tx *gorm.DB) (err error) {
-	if like.PostId == 0 && like.CommentId == 0 {
-		return errors.New("either PostID or CommentID must be set")
-	}
-	return nil
+type Vote struct {
+	Model
+	VoteId int64 `gorm:"size:64;not null;uniqueIndex:idx_vote_id;column:vote_id" json:"vote_id,string"`
+	UserId int64 `gorm:"size:64;not null;index;column:user_id" json:"user_id,string"`
+	// 为1表示帖子，为2表示评论
+	Type     int8  `gorm:"size:4;not null;column:type" json:"type"`
+	TargetId int64 `gorm:"size:64;null;index;column:target_id" json:"target_id,string"`
+	// 表示评论类型，取值为0，1，-1，分别表示未评论，赞，踩
+	Val int8 `gorm:"size:4;not null;column:val" json:"val"`
 }
+
+// Custom validation logic to enforce CHECK constraint
+//func (like *Like) BeforeSave(tx *gorm.DB) (err error) {
+//	if like.PostId == 0 && like.CommentId == 0 {
+//		return errors.New("either PostID or CommentID must be set")
+//	}
+//	return nil
+//}
 
 type Conversation struct {
 	Model
-	ConversationId int64 `gorm:"size:64;not null;uniqueIndex:idx_conversation_id;column:conversation_id" json:"id,string"`
+	ConversationId int64 `gorm:"size:64;not null;uniqueIndex:idx_conversation_id;column:conversation_id" json:"conversation_id,string"`
 	User1Id        int64 `gorm:"size:64;not null;index:idx_user_ids,unique;column:user_1_id" json:"user-1-id,string"`
 	User2Id        int64 `gorm:"size:64;not null;index:idx_user_ids,unique;column:user_2_id" json:"user-2-id,string"`
 
@@ -193,7 +216,7 @@ type Conversation struct {
 
 type Message struct {
 	Model
-	MessageId      int64  `gorm:"size:64;not null;uniqueIndex:idx_message_id;column:message_id" json:"id,string"`
+	MessageId      int64  `gorm:"size:64;not null;uniqueIndex:idx_message_id;column:message_id" json:"message_id,string"`
 	ConversationId int64  `gorm:"size:64;not null;index;column:conversation_id" json:"conversation_id,string"`
 	SenderId       int64  `gorm:"size:64;not null;index;column:sender_id" json:"sender_id,string"`
 	Content        string `gorm:"size:8192;not null;column:content" json:"content"`

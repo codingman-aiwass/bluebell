@@ -66,3 +66,7 @@ func (r *likeRepository) FindPageByCnd(db *gorm.DB, cnd *sqls.Cnd) (list []model
 func (r *likeRepository) Delete(db *gorm.DB, id int64) {
 	db.Delete(&models.Like{}, "like_id = ?", id)
 }
+func (r *likeRepository) UpdateColumn(db *gorm.DB, id int64, name string, value interface{}) (err error) {
+	err = db.Model(&models.Like{}).Where("like_id = ?", id).UpdateColumn(name, value).Error
+	return
+}

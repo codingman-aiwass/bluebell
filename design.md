@@ -44,7 +44,9 @@
 需要在mysql的评论数据表中添加对该评论的点赞数，评论数（跟评论需要，子评论不需要），点踩数，根评论ID（方便增加根评论的评论数，方便在删除根评论的时候，删除其下所有的子评论），分数（热评）
 需要重写评论树实现的方法，去除在Redis中手动维护一棵评论树的方法，去除删除一个子评论时删除其下所有追评的逻辑，只有在删除根评论时才删除其下所有子评论
 可以准备一下，放弃手动维护评论树的原因
-
+需要添加一个表，记录用户对帖子和评论的点赞情况，t_like表示用户收藏了帖子
+帖子的点赞数量的获取，首先通过查询redis缓存post:vote_up/down，缓存中没有的话，去t_vote表中，通过计数符合下面条件：val=1，target id = post id，type = 1的记录，并写入redis post:vote_up/down
+用户修改点赞情况时，除了修改MySQL，redis中的user_action，还需要修改post:vote_up,post:vote_down。并设置一个定时任务，定期检查缓存中的点赞数量是否和MySQL数据库一致
 
 ### message设计
 1. 用户可以向其他用户发送消息，也可以是系统向用户推送消息
@@ -59,6 +61,35 @@
 「先更新数据库，再删除缓存」的方案虽然保证了数据库与缓存的数据一致性，但是每次更新数据的时候，缓存的数据都会被删除，这样会对缓存的命中率带来影响。
 因此可以采用先更新数据库，再更新缓存的方法。但是为防止多线程并行执行导致的数据库/缓存数据不一致问题，需要加上分布式锁/缓存过期时间，保证数据库/缓存一致性
 
+限流策略的设计：使用`juju/ratelimit`，使用一个sync.Map存储每个用户对应的令牌桶，保证并发安全。Key为user_id+IP，或者email+IP，限制每分钟只能获取一个令牌
+
+```go
+
+import (
+    "fmt"
+    "net/http"
+    "sync"
+    "time"
+
+    "github.com/juju/ratelimit"
+)
+
+var userBuckets = sync.Map{}
+
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+    user := r.RemoteAddr
+
+    userBucket, ok := userBuckets.LoadOrStore(user, ratelimit.NewBucketWithRate(1, time.Minute))
+
+    if userBucket.(*ratelimit.Bucket).Take(1) == ratelimit.Wait {
+        http.Error(w, "Too many requests", http.StatusTooManyRequests)
+        return
+    }
+
+    fmt.Fprintf(w, "Request handled at %s\n", time.Now())
+}
+
+```
 
 ### 本地cache和redis的选择
 #### 适用于`goburrow/cache`的场景

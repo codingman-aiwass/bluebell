@@ -82,6 +82,8 @@ func GetPostById(c *gin.Context) {
 	postDetail := new(models.PostDetail)
 	// 获取post id
 	postId := c.Param("id")
+	// 获取当前用户ID
+	currentUserId := c.GetInt64(ContextUserIdKey)
 
 	// 获取记录
 	id, err := strconv.ParseInt(postId, 10, 64)
@@ -96,6 +98,7 @@ func GetPostById(c *gin.Context) {
 		ResponseError(c, CODE_INTERNAL_ERROR)
 		return
 	}
+
 	// 获取username
 	username, err := logic.GetUsernameById(post.AuthorID)
 	if err != nil {
@@ -116,9 +119,17 @@ func GetPostById(c *gin.Context) {
 	postDetail.Content = post.Content
 
 	postDetail.YesVotes, postDetail.CommentNum, postDetail.ClickNums = logic.GetPostDetailedInfo1(post.PostId)
+	//postDetail.YesVotes, postDetail.CommentNum, postDetail.ClickNums = post.VoteUpNums, post.CommentNums, post.ClickNums
 
 	postDetail.UpdateAt = post.UpdateAt
 	postDetail.CommunityName = community.CommunityName
+	// 浏览量+1,需要同时操作MySQL数据库和Redis
+	err = logic.AddPostClickNum(currentUserId, post.PostId)
+	if err != nil {
+		zap.L().Error("add post click num error", zap.Error(err))
+	} else {
+		zap.L().Info("add post click num success")
+	}
 
 	ResponseSuccess(c, postDetail)
 
@@ -209,12 +220,14 @@ func VoteForPost(c *gin.Context) {
 	if err != nil {
 		zap.L().Error("bind post failed", zap.Error(err))
 		ResponseError(c, CODE_PARAM_ERROR)
+		return
 	}
 	// 获取userId
 	userId, exists := c.Get(ContextUserIdKey)
 	if !exists {
 		zap.L().Error("get userId failed", zap.Error(err))
 		ResponseError(c, CODE_NOT_LOGIN)
+		return
 	}
 	// 2. 逻辑层处理
 	err = logic.VotePost(userId.(int64), votePost)

@@ -7,11 +7,12 @@ import (
 )
 
 type AppSettings struct {
-	AppCfg   *AppConfig   `mapstructure:"app"`
-	LogCfg   *LogConfig   `mapstructure:"log"`
-	MysqlCfg *MysqlConfig `mapstructure:"mysql"`
-	RedisCfg *RedisConfig `mapstructure:"redis"`
-	EmailCfg *EmailConfig `mapstructure:"email"`
+	AppCfg   *AppConfig          `mapstructure:"app"`
+	LogCfg   *LogConfig          `mapstructure:"log"`
+	MysqlCfg *MysqlConfig        `mapstructure:"mysql"`
+	RedisCfg *RedisConfig        `mapstructure:"redis"`
+	EmailCfg *EmailConfig        `mapstructure:"email"`
+	MQCfg    *MessageQueueConfig `mapstructure:"message_queue"`
 }
 type AppConfig struct {
 	Name      string `mapstructure:"name"`
@@ -49,6 +50,12 @@ type EmailConfig struct {
 	AuthKey  string `mapstructure:"email_auth_key"`
 	SmtpHost string `mapstructure:"smtp_host"`
 	SmtpPort int    `mapstructure:"smtp_port"`
+}
+
+type MessageQueueConfig struct {
+	Brokers        []string `mapstructure:"brokers"`
+	MaxWaitingTime int      `mapstructure:"max_waiting_time"`
+	MaxBatchSize   int      `mapstructure:"max_batch_size"`
 }
 
 var GlobalSettings = new(AppSettings)

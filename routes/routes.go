@@ -38,7 +38,7 @@ func SetupRouter(mode string) *gin.Engine {
 		v1.GET("/post/link", controllers.GetPostLink)
 		v1.GET("/posts1", controllers.GetPostList1)
 		v1.GET("/posts2", controllers.GetPostList2)
-		v1.GET("/post/:id", controllers.GetPostById)
+
 		v1.GET("/comment/by-post-id", controllers.GetCommentByPostId)
 		v1.GET("/comment/total-count", controllers.GetTotalCommentsCount)
 		v1.GET("/comment/sub-comments-count", controllers.GetSubCommentsCount)
@@ -50,6 +50,7 @@ func SetupRouter(mode string) *gin.Engine {
 
 		v1.POST("/edit-info", controllers.EditUserInfo)
 		v1.POST("/post", controllers.CreatePost)
+		v1.GET("/post/:id", controllers.GetPostById)
 		v1.POST("/post/vote", controllers.VoteForPost)
 		v1.POST("/send-email", controllers.SendEmail)
 		v1.POST("/post/collect", controllers.CollectPost)

@@ -75,9 +75,9 @@ CREATE TABLE `t_comment`(
     `update_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_comment_id`(`comment_id`),
-#     FOREIGN KEY (post_id) REFERENCES t_post(post_id),
-#     FOREIGN KEY (user_id) REFERENCES t_user(user_id),
-#     FOREIGN KEY (parent_comment_id) REFERENCES t_comment(comment_id) ON DELETE CASCADE,
+-- #     FOREIGN KEY (post_id) REFERENCES t_post(post_id),
+-- #     FOREIGN KEY (user_id) REFERENCES t_user(user_id),
+-- #     FOREIGN KEY (parent_comment_id) REFERENCES t_comment(comment_id) ON DELETE CASCADE,
     PRIMARY KEY (`id`)
 )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -87,14 +87,28 @@ CREATE TABLE t_like (
     `like_id` bigint(64) NOT NULL,
     `user_id` bigint(64) NOT NULL, -- The user who liked the post or comment
     `post_id` bigint(64) NULL, -- Post being liked (if not NULL)
-    `comment_id` bigint(64) NULL, -- Comment being liked (if not NULL)
+--     `comment_id` bigint(64) NULL, -- Comment being liked (if not NULL)
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_like_id`(`like_id`),
-#     FOREIGN KEY (user_id) REFERENCES t_user(user_id),
-#     FOREIGN KEY (post_id) REFERENCES t_post(post_id),
-#     FOREIGN KEY (comment_id) REFERENCES t_comment(comment_id),
-    CHECK (post_id IS NOT NULL OR comment_id IS NOT NULL), -- Ensure at least one is set
+-- #     FOREIGN KEY (user_id) REFERENCES t_user(user_id),
+-- #     FOREIGN KEY (post_id) REFERENCES t_post(post_id),
+-- #     FOREIGN KEY (comment_id) REFERENCES t_comment(comment_id),
+--     CHECK (post_id IS NOT NULL OR comment_id IS NOT NULL), -- Ensure at least one is set
+    PRIMARY KEY (`id`)
+);
+
+DROP TABLE IF EXISTS `t_vote`;
+CREATE TABLE t_vote (
+    `id` bigint(64) NOT NULL AUTO_INCREMENT,
+    `vote_id` bigint(64) NOT NULL,
+    `user_id` bigint(64) NOT NULL, -- The user who liked the post or comment
+    `type` tinyint(4) NOT NULL,   -- The type,indicate the user like is a post or comment
+    `target_id` bigint(64) NOT NULL, -- Post id or comment id
+    `val` tinyint(4) NOT NULL,   -- The type,indicate the user comment is a vote-up or vote-down or not made
+    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    `delete_at` TIMESTAMP,
+    UNIQUE KEY `idx_vote_id`(`vote_id`),
     PRIMARY KEY (`id`)
 );
 
@@ -107,8 +121,8 @@ CREATE TABLE t_conversation (
    `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    `delete_at` TIMESTAMP,
    UNIQUE KEY `idx_conversation_id`(`conversation_id`),
-#    FOREIGN KEY (user1_id) REFERENCES t_user(user_id),
-#    FOREIGN KEY (user2_id) REFERENCES t_user(user_id),
+-- #    FOREIGN KEY (user1_id) REFERENCES t_user(user_id),
+-- #    FOREIGN KEY (user2_id) REFERENCES t_user(user_id),
    UNIQUE(user1_id, user2_id), -- Ensures one conversation between two users
    PRIMARY KEY (`id`)
 );
@@ -123,8 +137,8 @@ CREATE TABLE t_message (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_message_id`(`message_id`),
-#     FOREIGN KEY (conversation_id) REFERENCES t_conversation(conversation_id),
-#     FOREIGN KEY (sender_id) REFERENCES t_user(user_id),
+-- #     FOREIGN KEY (conversation_id) REFERENCES t_conversation(conversation_id),
+-- #     FOREIGN KEY (sender_id) REFERENCES t_user(user_id),
     PRIMARY KEY (`id`)
 );
 
@@ -137,8 +151,8 @@ CREATE TABLE t_follow (
     `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     `delete_at` TIMESTAMP,
     UNIQUE KEY `idx_follow_id`(`follow_id`),
-#     FOREIGN KEY (follower_id) REFERENCES t_user(id),
-#     FOREIGN KEY (following_id) REFERENCES t_user(id),
+-- #     FOREIGN KEY (follower_id) REFERENCES t_user(id),
+-- #     FOREIGN KEY (following_id) REFERENCES t_user(id),
     UNIQUE(follower_id, following_id), -- Prevent duplicate follows
     PRIMARY KEY (`id`)
 );

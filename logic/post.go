@@ -4,14 +4,19 @@ import (
 	"bluebell/cache"
 	"bluebell/dao/mysql_repo"
 	"bluebell/dao/redis_repo"
+	"bluebell/message_queue"
 	"bluebell/models"
 	"bluebell/pkg/snowflake"
 	"bluebell/pkg/sqls"
 	"errors"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"strconv"
 )
 
+const PostType = 1
+
+var Directions = [3]string{"none", "like", "dislike"}
 var (
 	ERROR_POST_NOT_EXISTS     = errors.New("post not exists")
 	ERROR_ILLEGAL_POST_DELETE = errors.New("can not delete other's post")
@@ -21,7 +26,7 @@ func CreatePost(post *models.Post) (err error) {
 	err = mysql_repo.PostRepository.Create(sqls.DB(), post)
 	if err != nil {
 		zap.L().Error("mysql_repo.CreatePost(post) failed", zap.Error(err))
-		return
+		return err
 	}
 	err = redis_repo.CreatePost(post)
 	if err != nil {
@@ -33,31 +38,58 @@ func CreatePost(post *models.Post) (err error) {
 
 func GetPostById(id int64) (post *models.Post, err error) {
 	p := cache.PostCache.Get(id)
+	if err != nil {
+		return nil, err
+	}
 	if p == nil {
 		return nil, ERROR_POST_NOT_EXISTS
 	}
 	return p, nil
 }
 
-// 返回帖子的其他详细信息，例如点赞数，评论数，浏览量
+// GetPostDetailedInfo1 返回帖子的其他详细信息，例如点赞数，评论数，浏览量
 func GetPostDetailedInfo1(postId int64) (yes_vote, comment_num, click_num int64) {
-	yes, err := redis_repo.GetPostVoteNumById(postId)
-	if err != nil {
-		yes = 0
-	}
-	comment, err := redis_repo.GetPostCommentNumById(postId)
-	if err != nil {
-		comment = 0
-	}
-
-	click, err := redis_repo.GetPostClickNumById(postId)
-	if err != nil {
-		click = 0
-	}
-	yes_vote = int64(yes)
-	comment_num = int64(comment)
-	click_num = int64(click)
+	yes_vote = GetPostVoteNumById(postId)
+	comment_num = GetPostCommentNumById(postId)
+	click_num = GetPostClickNumById(postId)
 	return
+}
+
+func GetPostVoteNumById(postId int64) int64 {
+	result, err := redis_repo.GetPostVoteNumById(postId)
+	if errors.Is(err, redis.Nil) {
+		// 说明需要去mysql中查询，缓存中无此项数据
+		cnt := mysql_repo.VoteRepository.Count(sqls.DB(), sqls.NewCnd().Where("type = ?", 1).Where("target_id = ?", postId).Where("val = ?", 1))
+		err = nil
+
+		redis_repo.AddToZset(ctx, redis_repo.KeyPostVoteUpZset, redis.Z{Score: float64(cnt), Member: postId})
+	}
+	return int64(result)
+}
+
+func GetPostCommentNumById(postId int64) int64 {
+	result, err := redis_repo.GetPostCommentNumById(postId)
+	if errors.Is(err, redis.Nil) {
+		// 说明需要去mysql中查询，缓存中无此项数据
+		cnt := mysql_repo.CommentRepository.Count(sqls.DB(), sqls.NewCnd().Where("post_id = ?", postId))
+		err = nil
+
+		redis_repo.AddToZset(ctx, redis_repo.KeyPostCommentZset, redis.Z{Score: float64(cnt), Member: postId})
+	}
+	return int64(result)
+}
+
+func GetPostClickNumById(postId int64) int64 {
+	result, err := redis_repo.GetPostClickNumById(postId)
+	if errors.Is(err, redis.Nil) {
+		// 说明需要去mysql中查询，缓存中无此项数据
+		post := mysql_repo.PostRepository.Get(sqls.DB(), postId)
+		result = float64(post.ClickNums)
+		err = nil
+
+		redis_repo.AddToZset(ctx, redis_repo.KeyPostClickZset, redis.Z{Score: float64(post.ClickNums), Member: post.PostId})
+	}
+	return int64(result)
 }
 
 func GetPosts(page int, size int) (posts []models.Post, err error) {
@@ -84,88 +116,65 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	//	return redis_repo.ERROR_EXPIRED_POST
 	//}
 
-	// 需要从Redis中获取当前用户对该帖子的评分情况
+	// 需要从Redis中获取当前用户对该帖子的点赞情况
 	oValue, err := redis_repo.GetUser2PostVoted(strconv.FormatInt(userId, 10), post.PostId)
-	if err != nil {
+	if errors.Is(err, redis.Nil) {
+		// 说明Redis中不存在该用户对此帖子的点赞情况，可能是Redis中数据丢失了（需要去MySQL中查找），也可能是用户确实没有点赞/点踩过该帖子（mysql数据库中也没有记录）
+		// 检查是否存在布隆过滤器
+		exists, err := redis_repo.Exists(ctx, redis_repo.UserLikeOrDislike2PostBloomFilter)
+		if err != nil {
+			zap.L().Error("checking UserLikeOrDislike2PostBloomFilter error", zap.Error(err))
+			return err
+		}
+		if exists {
+			// 当查询Redis时发现查不到该用户的操作记录以后，就去布隆过滤器查。布隆过滤器也没有此数据的话，说明MySQL中不可能会有，不需要去查，布隆过滤器中有，才去MySQL查
+			// 去布隆过滤器中查询该用户是否点赞/点踩过此帖子
+			exist, err := redis_repo.CheckInBloomFilter(redis_repo.UserLikeOrDislike2PostBloomFilter, strconv.FormatInt(userId, 10))
+			if err != nil {
+				zap.L().Error("Error occurred in CheckInBloomFilter", zap.Error(err))
+				return err
+			}
+			if exist {
+				// 说明布隆过滤器中存在该用户记录，数据库中有记录，去数据库查询
+				vote := mysql_repo.VoteRepository.FindOne(sqls.DB(), sqls.NewCnd().Where("user_id = ?", userId).Where("type = ?", PostType).Where("target_id = ?", post.PostId))
+				if vote != nil {
+					oValue = Directions[vote.Val]
+				} else {
+					// 数据库中不存在用户点赞记录
+					oValue = Directions[0]
+				}
+
+			} else {
+				// 布隆过滤器中不存在该用户记录，数据库中也没有记录，直接设置为none
+				oValue = Directions[0]
+			}
+		} else {
+			// 布隆过滤器不存在，需要创建，同时也说明当前没有用户对帖子点赞/点踩过（项目刚上线）,此时数据库中也不会有记录，直接设置为none
+			err = redis_repo.CreateBloomFilter(ctx, redis_repo.UserLikeOrDislike2PostBloomFilter, 0.01, 10000)
+			if err != nil {
+				zap.L().Error("Error occurred in CreateBloomFilter", zap.Error(err))
+				return err
+			}
+			oValue = Directions[0]
+		}
+	} else if err != nil {
 		zap.L().Error("get post voted error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
 		return
 	}
 	// 如果原值和新值相同，不做处理
-	if oValue == float64(post.Direction) {
+	if oValue == Directions[*post.Direction] {
 		return nil
 	}
-
-	// 修改点赞数量
-
-	//if post.Direction == 1 {
-	//	// 需要将bluebell:post:voted:postId 下该用户的记录设置为1
-	//	err = redis_repo.SetPostVote(post.PostId, 1)
-	//	if oValue == -1 {
-	//		// 取消点踩
-	//		err = redis_repo.SetPostDevote(post.PostId, -1)
-	//	}
-	//} else if post.Direction == 0 {
-	//	// 需要删除bluebell:post:voted:postId 下该用户的记录
-	//	if oValue == 1 {
-	//		// 取消点赞
-	//		err = redis_repo.SetPostVote(post.PostId, -1)
-	//	} else if oValue == -1 {
-	//		// 取消点踩
-	//		err = redis_repo.SetPostDevote(post.PostId, -1)
-	//	}
-	//} else if post.Direction == -1 {
-	//	// 需要将bluebell:post:voted:postId 下该用户的记录设置为-1
-	//	err = redis_repo.SetPostDevote(post.PostId, 1)
-	//	if oValue == 1 {
-	//		err = redis_repo.SetPostVote(post.PostId, -1)
-	//	}
-	//}
-
-	err = redis_repo.SetUser2PostVotedAndPostVoteNum(float64(post.Direction), oValue, post.PostId, strconv.FormatInt(userId, 10))
+	// 去redis中写入数据，并在写入Redis之前发送修改消息到消息队列，消费者需要处理消息（修改MySQL，以及向用户发送私信）
+	postId, _ := strconv.ParseInt(post.PostId, 10, 64)
+	err = redis_repo.SetUser2PostVotedAndPostVoteNum(Directions[*post.Direction], oValue, postId, userId)
 
 	if err != nil {
 		zap.L().Error("error occur during modify redis post vote or devote...", zap.Error(err))
 		return err
 	}
 
-	// 修改帖子点赞/点踩数量，和修改user目前点赞情况，都用SetUser2PostVotedAndPostVoteNum 在一个事务中处理了
-
-	// 修改评分（之前的根据点赞/点踩情况计算帖子评分，暂时废弃）
-	//diff := math.Abs(float64(post.Direction) - oValue)
-
-	//if post.Direction != 0 {
-	//	err = redis_repo.SetPostScore(post.PostId, redis_repo.PER_VOTE_VALUE*diff*float64(post.Direction))
-	//} else {
-	//	err = redis_repo.SetPostScore(post.PostId, -redis_repo.PER_VOTE_VALUE*diff*oValue)
-	//}
-	//if err != nil {
-	//	zap.L().Error("set post score error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
-	//	return
-	//}
-
-	// 修改user目前点赞/点踩情况
-	//err = redis_repo.SetUser2PostVoted(strconv.Itoa(int(userId)), post.PostId, float64(post.Direction))
-	//if err != nil {
-	//	zap.L().Error("update user score to redis_repo error", zap.Int64("userid", userId), zap.String("postId", post.PostId), zap.Error(err))
-	//	return err
-	//}
-
 	return nil
-}
-
-func GetPostsIds(param *models.ParamPostList) (ids []string, err error) {
-	ids, err = redis_repo.GetPostIds(param)
-	return ids, err
-}
-
-// bluebell:post:voted:post_id 中存放了所有用户对这个帖子的点赞情况
-// bluebell:post:vote 记录了每个帖子的点赞数
-func GetPostVotes(ids []string, vote string) (result []int64, err error) {
-	// vote =  1  即为查询赞成票
-	// vote = -1  即为查询反对票
-	// zcount bluebell:post:voted:613378252513218560 1 1
-	result, err = redis_repo.GetPostVote(ids, vote)
-	return result, err
 }
 
 func GetPostsWithOrder(param *models.ParamPostList) (posts []models.Post, err error) {
@@ -223,6 +232,14 @@ func DeletePost(postId, userId int64) (err error) {
 		return ERROR_ILLEGAL_POST_DELETE
 	}
 
+	// 先删除MySQL数据，然后删除缓存
+	if err = mysql_repo.PostRepository.DeletePostInfo(sqls.DB(), postId); err != nil {
+		zap.L().Error("fail to delete post related info in mysql", zap.Error(err))
+		return err
+	}
+	// 清除post缓存
+	cache.PostCache.Invalidate(postId)
+
 	// 删除对该帖子所有的点赞/点踩/收藏/评论/分数
 	// 点赞/点踩/分数/评论数在redis中
 	// 收藏/评论在MySQL中
@@ -231,13 +248,6 @@ func DeletePost(postId, userId int64) (err error) {
 		zap.L().Error("fail to delete post related info in redis", zap.Error(err))
 		return err
 	}
-
-	if err = mysql_repo.PostRepository.DeletePostInfo(sqls.DB(), postId); err != nil {
-		zap.L().Error("fail to delete post related info in mysql", zap.Error(err))
-		return err
-	}
-	// 清除post缓存
-	cache.PostCache.Invalidate(postId)
 	return nil
 }
 
@@ -274,4 +284,21 @@ func CheckInBlacklist(userId, postId int64) (res bool, err error) {
 		return
 	}
 	return res, nil
+}
+
+func AddPostClickNum(userId, postId int64) (err error) {
+	// 先写入redis，然后再发送到消息队列
+	// 如果redis中没有值，读取数据库中的值并加1写入redis
+	err = redis_repo.AddPostClickNum(postId)
+	if err != nil {
+		zap.L().Error("error in logic.AddPostClickNum()", zap.Error(err))
+		return err
+	}
+	// 往消息队列中发送一个请求
+	event := message_queue.PostClickEvent{UserId: userId, PostId: postId}
+	err = message_queue.SendPostClickEvent(ctx, event)
+	if err != nil {
+		return err
+	}
+	return nil
 }

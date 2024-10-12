@@ -12,6 +12,7 @@ import (
 )
 
 const N_SUB_COMMENTS_TO_SHOW = 2
+const CommentType = 2
 
 var (
 	ERROR_ILLEGAL_COMMENT_DELETE = errors.New("can not delete other's comment")

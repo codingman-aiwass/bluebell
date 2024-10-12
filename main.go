@@ -18,6 +18,7 @@ import (
 	"bluebell/dao/mysql_repo"
 	"bluebell/dao/redis_repo"
 	"bluebell/logger"
+	"bluebell/message_queue"
 	"bluebell/pkg/snowflake"
 	"bluebell/routes"
 	"bluebell/settings"
@@ -66,7 +67,10 @@ func main() {
 	//5.注册路由
 	r := routes.SetupRouter(settings.GlobalSettings.AppCfg.Mode)
 
-	//6.启动服务（优雅关机
+	//6.启用消息队列
+	message_queue.InitMQ(settings.GlobalSettings.MQCfg)
+	fmt.Println("message queue init successfully")
+	//7.启动服务（优雅关机
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", settings.GlobalSettings.AppCfg.Port),
 		Handler: r,
