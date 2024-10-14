@@ -292,3 +292,37 @@ func VerifyEmail(c *gin.Context) {
 	}
 	ResponseSuccess(c, nil)
 }
+
+// FollowUser 实现关注用户功能
+// @Summary 实现关注用户
+// @Description 实现关注用户功能
+// @Tags 用户相关接口
+// @Produce application/json
+// @Param Authorization header string true "Bearer 用户令牌"
+// @Param object body models.ParamFollowUser true "action, other_user_id"
+// @Success 200 {object} _GeneralResponse
+// @Router /api/v1/follow-user [post]
+func FollowUser(c *gin.Context) {
+	// 1. 解析参数，参数就设置为json格式，选取post_id 和 direction(-1 0 1) 分别代表 反对/取消/赞成
+	query := new(models.ParamFollowUser)
+	err := c.ShouldBindJSON(query)
+	if err != nil {
+		zap.L().Error("bind failed", zap.Error(err))
+		ResponseError(c, CODE_PARAM_ERROR)
+		return
+	}
+	// 获取userId
+	userId := c.GetInt64(ContextUserIdKey)
+	if userId == 0 {
+		zap.L().Error("get userId failed", zap.Error(err))
+		ResponseError(c, CODE_NOT_LOGIN)
+		return
+	}
+	err = logic.FollowOtherUser(userId, query.OtherUserId, query.Action)
+	if err != nil {
+		zap.L().Error("follow other user error", zap.Error(err))
+		ResponseError(c, CODE_INTERNAL_ERROR)
+		return
+	}
+	ResponseSuccess(c, nil)
+}

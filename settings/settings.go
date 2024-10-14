@@ -7,12 +7,13 @@ import (
 )
 
 type AppSettings struct {
-	AppCfg   *AppConfig          `mapstructure:"app"`
-	LogCfg   *LogConfig          `mapstructure:"log"`
-	MysqlCfg *MysqlConfig        `mapstructure:"mysql"`
-	RedisCfg *RedisConfig        `mapstructure:"redis"`
-	EmailCfg *EmailConfig        `mapstructure:"email"`
-	MQCfg    *MessageQueueConfig `mapstructure:"message_queue"`
+	AppCfg       *AppConfig          `mapstructure:"app"`
+	LogCfg       *LogConfig          `mapstructure:"log"`
+	MysqlCfg     *MysqlConfig        `mapstructure:"mysql"`
+	RedisCfg     *RedisConfig        `mapstructure:"redis"`
+	EmailCfg     *EmailConfig        `mapstructure:"email"`
+	MQCfg        *MessageQueueConfig `mapstructure:"message_queue"`
+	FreeCacheCfg *FreeCacheConfig    `mapstructure:"free_cache"`
 }
 type AppConfig struct {
 	Name      string `mapstructure:"name"`
@@ -56,6 +57,11 @@ type MessageQueueConfig struct {
 	Brokers        []string `mapstructure:"brokers"`
 	MaxWaitingTime int      `mapstructure:"max_waiting_time"`
 	MaxBatchSize   int      `mapstructure:"max_batch_size"`
+}
+
+type FreeCacheConfig struct {
+	CacheSize   int `mapstructure:"cache_size"`
+	ExpiredTime int `mapstructure:"expire_time"`
 }
 
 var GlobalSettings = new(AppSettings)

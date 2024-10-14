@@ -84,6 +84,18 @@ type ParamGetCommentByPostId struct {
 	Size   int    `form:"size"`
 	PostId string `form:"post_id"`
 }
+
+type ParamFollowUser struct {
+	Action      int8  `form:"action" binding:"required,oneof=1 -1"`
+	OtherUserId int64 `json:"other_user_id,string" binding:"required"`
+}
+
+type FollowOperation struct {
+	Action       int8
+	UserId       int64
+	TargetUserId int64
+}
+
 type ResponseComment struct {
 	Username   string            `json:"username"`
 	Content    string            `json:"content"`
@@ -96,7 +108,7 @@ type ResponseComment struct {
 type Model struct {
 	Id       int64          `gorm:"size:64;primaryKey;autoIncrement;column:id" json:"id"`
 	CreateAt time.Time      `gorm:"type:timestamp;not null;default:CURRENT_TIMESTAMP;column:create_at" json:"create_at"`
-	DeleteAt gorm.DeletedAt `gorm:"index;column:delete_at" json:"deleted_at,omitempty"`
+	DeleteAt gorm.DeletedAt `gorm:"index;column:delete_at" json:"deleted_at,omitempty" swaggerignore:"true"`
 }
 
 type Post struct {
@@ -231,7 +243,8 @@ type Follow struct {
 	FollowId    int64 `gorm:"size:64;not null;uniqueIndex:idx_follow_id;column:follow_id" json:"follow_id,string"`
 	FollowerId  int64 `gorm:"size:64;not null;index:idx_follow_ids,unique;column:follower_id" json:"follower_id,string"`
 	FollowingId int64 `gorm:"size:64;not null;index:idx_follow_ids,unique;column:following_id" json:"following_id,string"`
-
+	// 表示关注类型，取值为0，1，分别表示未关注，关注
+	Val int8 `gorm:"size:4;not null;column:val" json:"val"`
 	// Relationships
 	//Follower  User `gorm:"foreignKey:FollowerId;references:UserId"`
 	//Following User `gorm:"foreignKey:FollowingId;references:UserId"`

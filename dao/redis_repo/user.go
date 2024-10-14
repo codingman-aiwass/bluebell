@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go.uber.org/zap"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -102,4 +103,47 @@ func CheckInBlackList(ctx context.Context, userId1, userId2 string) (res bool, e
 		return
 	}
 	return res, nil
+}
+
+func CheckUserFollowedTargetUser(ctx context.Context, userId, targetUserId int64) (res bool, err error) {
+	key := getKey(KeyUserFollowListSet + ":" + strconv.FormatInt(userId, 10))
+	res, err = rdb.SIsMember(ctx, key, targetUserId).Result()
+	if err != nil {
+		zap.L().Error("fail to check target user is in user's follow list...", zap.Error(err))
+		return
+	}
+	return res, nil
+}
+
+// ExecuteBatchFollowIncrOperation 批量同步用户关注数，粉丝数的增长情况
+func ExecuteBatchFollowIncrOperation(keys [][]byte, values []interface{}) (err error) {
+	pipe := rdb.TxPipeline()
+	for i, key := range keys {
+		strs := strings.Split(string(key), ":")
+		Count, _ := strconv.Atoi(values[i].(string))
+		if strs[0] == "fans" {
+			// fans:targetUserId:1;fans:targetUserId:-1
+			pipe.ZIncrBy(ctx, getKey(KeyUserFansCountZset), float64(Count), strs[1])
+		} else if strs[0] == "follows" {
+			// follows:UserId:1;follows:UserId:-1
+			pipe.ZIncrBy(ctx, getKey(KeyUserFollowsCountZset), float64(Count), strs[1])
+		}
+	}
+	_, err = pipe.Exec(ctx)
+	return err
+}
+
+func ExecuteBatchFollowOperation(ops []models.FollowOperation) (err error) {
+	pipe := rdb.TxPipeline()
+	for _, op := range ops {
+		if op.Action == 1 {
+			pipe.SAdd(ctx, getKey(KeyUserFollowListSet+":"+strconv.FormatInt(op.UserId, 10)), op.TargetUserId)
+			pipe.SAdd(ctx, getKey(KeyUserFansListSet)+":"+strconv.FormatInt(op.TargetUserId, 10), op.UserId)
+		} else {
+			pipe.SRem(ctx, getKey(KeyUserFollowListSet+":"+strconv.FormatInt(op.UserId, 10)), op.TargetUserId)
+			pipe.SRem(ctx, getKey(KeyUserFansListSet)+":"+strconv.FormatInt(op.TargetUserId, 10), op.UserId)
+		}
+	}
+	_, err = pipe.Exec(ctx)
+	return err
 }

@@ -9,9 +9,11 @@ import (
 	"bluebell/pkg/snowflake"
 	"bluebell/pkg/sqls"
 	"errors"
+	"fmt"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"strconv"
+	"time"
 )
 
 const PostType = 1
@@ -120,7 +122,7 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	oValue, err := redis_repo.GetUser2PostVoted(strconv.FormatInt(userId, 10), post.PostId)
 	if errors.Is(err, redis.Nil) {
 		// 说明Redis中不存在该用户对此帖子的点赞情况，可能是Redis中数据丢失了（需要去MySQL中查找），也可能是用户确实没有点赞/点踩过该帖子（mysql数据库中也没有记录）
-		// 检查是否存在布隆过滤器
+		// 检查是否存在布隆过滤器，没必要用布隆过滤器
 		exists, err := redis_repo.Exists(ctx, redis_repo.UserLikeOrDislike2PostBloomFilter)
 		if err != nil {
 			zap.L().Error("checking UserLikeOrDislike2PostBloomFilter error", zap.Error(err))
@@ -165,12 +167,31 @@ func VotePost(userId int64, post *models.ParamVotePost) (err error) {
 	if oValue == Directions[*post.Direction] {
 		return nil
 	}
-	// 去redis中写入数据，并在写入Redis之前发送修改消息到消息队列，消费者需要处理消息（修改MySQL，以及向用户发送私信）
+	// 去redis中写入数据，在写入Redis成功后再发送修改消息到消息队列，消费者需要处理消息（修改MySQL，以及向用户发送私信）
 	postId, _ := strconv.ParseInt(post.PostId, 10, 64)
 	err = redis_repo.SetUser2PostVotedAndPostVoteNum(Directions[*post.Direction], oValue, postId, userId)
 
 	if err != nil {
 		zap.L().Error("error occur during modify redis post vote or devote...", zap.Error(err))
+		return err
+	}
+	// 在这里根据oValue 和 Directions[*post.Direction] 封装消息到消息队列，防止循环引用
+	message := message_queue.PostLikeEvent{
+		Action:    Directions[*post.Direction],
+		UserId:    userId,
+		PostId:    postId,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	// cancel需要发送给原来的event
+	var targetTopic string
+	if *post.Direction == 0 {
+		targetTopic = fmt.Sprintf("post-%s-events", oValue)
+	} else {
+		targetTopic = fmt.Sprintf("post-%s-events", Directions[*post.Direction])
+	}
+	err = message_queue.SendPostLikeEvent(ctx, targetTopic, message)
+	if err != nil {
+		zap.L().Error("send message to message queue error in redis_repo.likePost")
 		return err
 	}
 

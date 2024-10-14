@@ -2,7 +2,6 @@ package redis_repo
 
 import (
 	"bluebell/dao/mysql_repo"
-	"bluebell/message_queue"
 	"bluebell/models"
 	"bluebell/pkg/sqls"
 	"errors"
@@ -64,17 +63,6 @@ func likePost(postId, userId int64, oValue string) (err error) {
 
 	// 设置为点赞
 	if oValue != "like" {
-		message := message_queue.PostLikeEvent{
-			Action:    "like",
-			UserId:    userId,
-			PostId:    postId,
-			Timestamp: time.Now().Format(time.RFC3339),
-		}
-		err = message_queue.SendPostLikeEvent(ctx, "post-like-events", message)
-		if err != nil {
-			zap.L().Error("send message to message queue error in redis_repo.likePost")
-			return err
-		}
 		pipe.ZIncrBy(ctx, getKey(KeyPostVoteUpZset), 1, strconv.FormatInt(postId, 10))
 		pipe.HSet(ctx, getKey(KeyPostActionPrefix+strconv.FormatInt(postId, 10)), userId, "like")
 		pipe.Do(ctx, "BF.ADD", UserLikeOrDislike2PostBloomFilter, userId)
@@ -93,16 +81,6 @@ func dislikePost(postId, userId int64, oValue string) (err error) {
 
 	// 设置为点踩
 	if oValue != "dislike" {
-		message := message_queue.PostLikeEvent{
-			Action:    "dislike",
-			UserId:    userId,
-			PostId:    postId,
-			Timestamp: time.Now().Format(time.RFC3339),
-		}
-		err = message_queue.SendPostLikeEvent(ctx, "post-dislike-events", message)
-		if err != nil {
-			return err
-		}
 		pipe.ZIncrBy(ctx, getKey(KeyPostVoteDownZset), 1, strconv.FormatInt(postId, 10))
 		pipe.HSet(ctx, getKey(KeyPostActionPrefix+strconv.FormatInt(postId, 10)), userId, "dislike")
 		pipe.Do(ctx, "BF.ADD", UserLikeOrDislike2PostBloomFilter, userId)
@@ -112,17 +90,6 @@ func dislikePost(postId, userId int64, oValue string) (err error) {
 }
 
 func cancelLikeOrDislike(postId, userId int64, oValue string) (err error) {
-	message := message_queue.PostLikeEvent{
-		Action:    "none",
-		UserId:    userId,
-		PostId:    postId,
-		Timestamp: time.Now().Format(time.RFC3339),
-	}
-	err = message_queue.SendPostLikeEvent(ctx, fmt.Sprintf("post-%s-events", oValue), message)
-	if err != nil {
-		zap.L().Error("cancelLikeOrDislike send msg error", zap.Error(err))
-		return err
-	}
 	pipe := rdb.TxPipeline()
 	pipe.HSet(ctx, getKey(KeyPostActionPrefix+strconv.FormatInt(postId, 10)), userId, "none")
 	if oValue == "like" {

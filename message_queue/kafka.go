@@ -32,6 +32,13 @@ type PostCollectionEvent struct {
 	Timestamp string `json:"timestamp"`
 }
 
+type UserFollowEvent struct {
+	Action       string `json:"action"`
+	UserId       int64  `json:"user_id"`
+	TargetUserId int64  `json:"target_user_id"`
+	Timestamp    string `json:"timestamp"`
+}
+
 // 初始化需要的消费者和生产者，以及对应的topic
 var (
 	LikeTopic              = "post-like-events"
@@ -40,6 +47,8 @@ var (
 	DislikeTopicMaxRetries = 1
 	PostClickTopic         = "post-click-events"
 	PostClickMaxRetries    = 1
+	UserFollowTopic        = "user-follow-events"
+	UserFollowMaxRetries   = 1
 	ctx                    = context.Background()
 )
 
@@ -65,6 +74,7 @@ func SendPostLikeEvent(ctx context.Context, topic string, message PostLikeEvent)
 			break
 		}
 	}
+	// TODO 消息发送失败，需要额外处理
 	return err
 }
 
@@ -92,6 +102,35 @@ func SendPostClickEvent(ctx context.Context, message PostClickEvent) (err error)
 			break
 		}
 	}
+	// TODO 消息发送失败，需要额外处理
+
+	return err
+}
+
+func SendUserFollowEvent(ctx context.Context, message UserFollowEvent) (err error) {
+	writer := kafka.Writer{
+		Addr:                   kafka.TCP(settings.GlobalSettings.MQCfg.Brokers...),
+		Topic:                  UserFollowTopic,
+		Balancer:               &kafka.Hash{},
+		WriteTimeout:           1 * time.Second,
+		RequiredAcks:           kafka.RequireAll,
+		AllowAutoTopicCreation: true,
+	}
+	defer writer.Close()
+	// try to send to mq for 3 times, if error, break
+	send_msg, _ := json.Marshal(message)
+	for i := 0; i < 3; i++ {
+		if err = writer.WriteMessages(
+			ctx, kafka.Message{Key: []byte(strconv.FormatInt(message.UserId, 10)), Value: send_msg}); err != nil {
+			zap.L().Info("write kafka error,try...", zap.Error(err))
+		} else {
+			zap.L().Info(fmt.Sprintf("send user follow event msg to mq successfully,action = %s,user id = %d,target user id = %d",
+				message.Action, message.UserId, message.TargetUserId))
+			break
+		}
+	}
+	// TODO 消息发送失败，需要额外处理
+
 	return err
 }
 
@@ -103,11 +142,19 @@ func InitMQ(cfg *settings.MessageQueueConfig) {
 	go disLikeProcessor.Start(ctx)
 	postClickProcessor := NewPostClickProcessor(cfg.Brokers, PostClickTopic, PostClickMaxRetries)
 	go postClickProcessor.Start(ctx)
+	userFollowProcessor := NewUserFollowProcessor(cfg.Brokers, UserFollowTopic, UserFollowMaxRetries)
+	go userFollowProcessor.Start(ctx)
 }
 
 // 帖子是否已被删除
 func postDeleted(postID int64) bool {
 	return mysql_repo.PostRepository.Get(sqls.DB(), postID) == nil
+}
+
+// 用户是否已经注销
+func userDeleted(userId int64) bool {
+	return mysql_repo.UserRepository.Get(sqls.DB(), userId) == nil
+
 }
 
 // 提交消息的 offset

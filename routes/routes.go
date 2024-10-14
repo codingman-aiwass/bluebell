@@ -47,7 +47,7 @@ func SetupRouter(mode string) *gin.Engine {
 	}
 	v1.Use(middleware.JWTAuthMiddleware())
 	{
-
+		v1.POST("/follow-user", controllers.FollowUser)
 		v1.POST("/edit-info", controllers.EditUserInfo)
 		v1.POST("/post", controllers.CreatePost)
 		v1.GET("/post/:id", controllers.GetPostById)

@@ -67,7 +67,7 @@ func main() {
 	//5.注册路由
 	r := routes.SetupRouter(settings.GlobalSettings.AppCfg.Mode)
 
-	//6.启用消息队列
+	//7.启用消息队列
 	message_queue.InitMQ(settings.GlobalSettings.MQCfg)
 	fmt.Println("message queue init successfully")
 	//7.启动服务（优雅关机

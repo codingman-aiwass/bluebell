@@ -4,6 +4,7 @@ import (
 	"bluebell/cache"
 	"bluebell/dao/mysql_repo"
 	"bluebell/dao/redis_repo"
+	"bluebell/message_queue"
 	"bluebell/models"
 	"bluebell/pkg/emails"
 	"bluebell/pkg/encrypt"
@@ -12,9 +13,13 @@ import (
 	"bluebell/pkg/validation"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/coocood/freecache"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"go.uber.org/zap"
+	"strconv"
+	"sync"
 	"time"
 )
 
@@ -36,6 +41,109 @@ const (
 	//LoginTokenExpireDuration    = time.Hour * 24 * 30 * 12
 	EMAIL_VERIFICATION_CODE_LEN = 6
 )
+
+var followService = newFollowService(1024*1024*1024, 100)
+
+type FollowService struct {
+	cache     *freecache.Cache // FreeCache 实例
+	mutex     sync.Mutex       // 保证线程安全
+	batchSize int              // 批量同步的数量
+}
+
+// NewFollowService 初始化 LikeService
+func newFollowService(cacheSize int, batchSize int) *FollowService {
+	fs := &FollowService{
+		cache:     freecache.NewCache(cacheSize), // 创建指定大小的 FreeCache
+		batchSize: batchSize,
+	}
+	go fs.StartSync(5 * time.Second)
+	return fs
+}
+
+// IncrementLike 增加本地缓存的点赞计数
+func (fs *FollowService) IncrementLike(userId, targetUserId string, increment int) error {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+
+	// 获取 FreeCache 该userId的粉丝数
+	fansKey := []byte(fmt.Sprintf("fans:%s:%d", targetUserId, increment))
+	followsKey := []byte(fmt.Sprintf("follows:%s:%d", userId, increment))
+	fansValue, err := fs.cache.Get(fansKey)
+	fansCount := 0
+	if err == nil {
+		fansCount, _ = strconv.Atoi(string(fansValue))
+	}
+
+	followsValue, err := fs.cache.Get(followsKey)
+	followsCount := 0
+	if err == nil {
+		fansCount, _ = strconv.Atoi(string(followsValue))
+	}
+
+	// 增加点赞数
+	fansCount += increment
+	followsCount += increment
+
+	// 将更新后的计数存回 FreeCache
+	err = fs.cache.Set(fansKey, []byte(strconv.Itoa(fansCount)), 60*10) // 缓存过期时间为 10 分钟
+	if err != nil {
+		return err
+	}
+	err = fs.cache.Set(followsKey, []byte(strconv.Itoa(followsCount)), 60*10) // 缓存过期时间为 10 分钟
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SyncToRedis 批量将 FreeCache 中的点赞数据同步到 Redis
+func (fs *FollowService) SyncToRedis() error {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	var keys [][]byte
+	var values []interface{}
+
+	// 批量获取 FreeCache 中的所有数据
+	iter := fs.cache.NewIterator()
+	for entry := iter.Next(); entry != nil; entry = iter.Next() {
+		key := entry.Key
+		value := entry.Value
+		// 解析 key,value
+		keys = append(keys, key)
+		values = append(values, string(value))
+	}
+
+	if len(keys) == 0 {
+		return nil // 如果没有数据则直接返回
+	}
+	// 使用 Pipeline 方式批量同步到 Redis
+	err := redis_repo.ExecuteBatchFollowIncrOperation(keys, values)
+	if err != nil {
+		return err
+	}
+
+	// 同步成功后清空 FreeCache
+	for _, key := range keys {
+		fs.cache.Del(key)
+	}
+	return nil
+}
+
+// StartSync 定期执行同步
+func (fs *FollowService) StartSync(interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	go func() {
+		for range ticker.C {
+			err := fs.SyncToRedis()
+			if err != nil {
+				fmt.Println("Error syncing to Redis:", err)
+			} else {
+				fmt.Println("Synced to Redis successfully.")
+			}
+		}
+	}()
+}
 
 // 处理和用户相关的具体业务逻辑
 
@@ -381,5 +489,98 @@ func GenerateCode(email1 string) (string, error) {
 	// 发送邮件
 
 	return code, nil
+
+}
+
+func FollowOtherUser(userId, otherUserId int64, action int8) (err error) {
+	// 首先去Redis中读取该用户对目标用户的关注情况
+	maxRetries := 3
+	var flag bool
+	for i := 0; i < maxRetries; i++ {
+		flag, err = redis_repo.CheckUserFollowedTargetUser(ctx, userId, otherUserId)
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Duration(i) * 100 * time.Millisecond)
+	}
+	if err != nil {
+		zap.L().Error("CheckUserFollowedTargetUser error after 3 retries", zap.Error(err))
+		return err
+	}
+
+	if flag {
+		// 已关注
+		switch action {
+		case -1:
+			// 取关
+			// 分为处理Redis和MySQL两部分
+			// 对于Redis中的关注数量和粉丝数量这俩热点数据，使用FreeCache进行批量写入
+			// 写入FreeCache
+			for i := 0; i < maxRetries; i++ {
+				err = followService.IncrementLike(strconv.FormatInt(userId, 10), strconv.FormatInt(otherUserId, 10), -1)
+				if err == nil {
+					break
+				}
+				time.Sleep(time.Duration(i) * 100 * time.Millisecond)
+			}
+			if err != nil {
+				zap.L().Error("followService.IncrementLike error after 3 retries", zap.Error(err))
+				return err
+			}
+			// 对于记录关注/粉丝数据，使用消息队列进行批量处理
+			// 每隔固定时间，将关注数，粉丝数记录批量写入Redis
+			err = message_queue.SendUserFollowEvent(ctx, message_queue.UserFollowEvent{
+				Action:       "cancel",
+				UserId:       userId,
+				TargetUserId: otherUserId,
+				Timestamp:    time.Now().Format(time.RFC3339),
+			})
+			if err != nil {
+				return err
+			}
+
+		case 1:
+			// 已关注，不需要再关注，直接返回
+			return nil
+		}
+	} else {
+		// 未关注
+		switch action {
+		case -1:
+			// 取关，没有关注，不需要取关，直接返回
+			return nil
+		case 1:
+			// 关注
+			// 分为处理Redis和MySQL两部分
+			// 对于Redis中的关注数量和粉丝数量这俩热点数据，使用FreeCache进行批量写入
+			// 写入FreeCache
+			for i := 0; i < maxRetries; i++ {
+				err = followService.IncrementLike(strconv.FormatInt(userId, 10), strconv.FormatInt(otherUserId, 10), 1)
+				if err == nil {
+					break
+				}
+				time.Sleep(time.Duration(i) * 100 * time.Millisecond)
+			}
+			if err != nil {
+				zap.L().Error("followService.IncrementLike error after 3 retries", zap.Error(err))
+				return err
+			}
+
+			// 对于记录关注/粉丝数据，使用消息队列进行批量处理
+			// 每隔固定时间，将关注数，粉丝数记录批量写入Redis
+			err = message_queue.SendUserFollowEvent(ctx, message_queue.UserFollowEvent{
+				Action:       "follow",
+				UserId:       userId,
+				TargetUserId: otherUserId,
+				Timestamp:    time.Now().Format(time.RFC3339),
+			})
+			if err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
 
 }

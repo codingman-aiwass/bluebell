@@ -17,6 +17,10 @@ const (
 	KeyPostCommentZset          = "post:comment_numbers"         // zset 帖子评论数量，统计这一帖子下面一共有多少评论。
 	KeyPostClickZset            = "post:click_numbers"           // zset 帖子浏览数量
 	KeyUserBlackListSet         = "user:blacklist"               // set 用户黑名单
+	KeyUserFollowListSet        = "user:follow_list"             // set 用户关注列表
+	KeyUserFansListSet          = "user:fans_list"               // set 粉丝关注列表
+	KeyUserFansCountZset        = "user:fans_count"              // zset 记录每个用户的粉丝数量，key为id，val为粉丝数量
+	KeyUserFollowsCountZset     = "user:follows_count"           // zset 记录每个用户的关注数量，key为id，val为关注数量
 	KeyCommentTimeZset          = "comment:time"                 // zset 评论以及评论时间
 	KeyCommentScoreZset         = "comment:score"                // zset 评论以及分数（计算热评）
 	KeyPostPrefix               = "post:"                        // 后面可以拼接postId，表内存放根评论
